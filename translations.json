@@ -1,0 +1,634 @@
+{
+    "errors": {
+        "missing_permissions": {
+            "pl": "You do not have %s permission to execute this command!",
+            "en": "You do not have %s permission to execute this command!"
+        },
+        "role_hierarchy": {
+            "pl": "%s jest wyżej niż moja najwyższa rola (%s)!",
+            "en": "%s is higher than my highest role (%s)!"
+        },
+        "insufficient_funds": {
+            "pl": "Nie masz wystarczających środków! (show missing money?)",
+            "en": "You have insufficient funds! (show missing money?)"
+        },
+        "role_present": {
+            "pl": "Już masz tą rolę!",
+            "en": "You already have this role!"
+        },
+        "role_absent": {
+            "pl": "Nie masz tej roli!",
+            "en": "You don't have this role!"
+        },
+        "item_already_exists": {
+            "pl": "'%s' już jest w sklepie! Użyj trybu 'Edytuj', aby edytować tą rzecz",
+            "en": "'%s' is already in the shop! Use 'Edit' mode to modify that item"
+        },
+        "item_doesnt_exist": {
+            "pl": "Nie ma '%s' w sklepie! Użyj trybu 'Dodaj', aby dodać tą rzecz do sklepu",
+            "en": "'%s' doesn't exist in the shop! Use 'Add' mode to add that item to the shop"
+        },
+        "price_not_provided": {
+            "pl": "Musisz podać cenę!",
+            "en": "You have to provide a price!"
+        }
+    },
+    "commands": {
+        "help": {
+            "name": "",
+            "description": {
+                "pl": "Pomocne gdy zapomnisz jak używać komend"
+            },
+            "options": {
+                "command_or_category": {
+                    "pl": "Komenda lub Kategoria komend, o której chcesz się więcej dowiedzieć"
+                }
+            },
+            "texts": {
+                "title": {
+                    "pl": "Wszystkie komendy",
+                    "en": "All commands"
+                },
+                "more_info": {
+                    "pl": "Wpisz `/help <command/category>` aby otrzymać więcej informacji o komendzie/kategorii",
+                    "en": "Use `/help <command/category>` to get additional info about a command/category"
+                },
+                "no_description": {
+                    "pl": "Brak opisu",
+                    "en": "No description"
+                },
+                "no_category": {
+                    "pl": "Brak kategorii",
+                    "en": "No category"
+                },
+                "category_field": {
+                    "pl": "Kategoria %s",
+                    "en": "Category %s"
+                },
+                "footer": {
+                    "pl": "Autor bota %s | Wersja %s",
+                    "en": "Made by %s | Version %s"
+                },
+                "cog_commands": {
+                    "pl": "%s - Komendy",
+                    "en": "%s - Commands"
+                },
+                "404-title": {
+                    "pl": "Co to?!",
+                    "en": "What's that?!"
+                },
+                "404-description": {
+                    "pl": "Nigdy nie słyszałem o `%s` :scream:",
+                    "en": "I've never heard of `%s` :scream:"
+                },
+                "how_to_use-title": {
+                    "pl": "Jak to działa?",
+                    "en": "How does it work?"
+                }
+            }
+        },
+        "funfact": {
+            "name": "",
+            "description": {
+                "pl": "Pokazuje funfact o bocie"
+            },
+            "texts": {
+                "response": {
+                    "pl": "Ten bot jest napisany w Pythonie, a jego kod ma `3108` linijek oraz `73106` znaków (nie wliczając spacji) w czasie pisania tego (<t:1664639078:D>)",
+                    "en": "This bot was written in Python and it's code has `3108` lines and `73106` characters (excluding spaces) at the time of writing this (<t:1664639078:D>)"
+                }
+            }
+        },
+        "delete_lvl_roles": {
+            "name": "",
+            "description": {
+                "pl": "Usuń wszystkie role dla lvl"
+            },
+            "texts": {
+                "response": {
+                    "pl": "Usunięto poprzednie role poziomów",
+                    "en": "Deleted previous level roles"
+                }
+            }
+        },
+        "give_everyone_role": {
+            "name": "",
+            "description": {
+                "pl": "Daj rolę wszystkim posiadającym daną rolę"
+            },
+            "options": {
+                "role_to_give": {
+                    "pl": "Jaką dać rolę"
+                },
+                "give_to_roles": {
+                    "pl": "Osoby z jaką rolą mają to otrzymać (@everyone defaultowo)"
+                },
+                "include_bots": {
+                    "pl": "Czy boty też mają otrzymać tę rolę (Nie defaultowo)"
+                },
+                "yes": {
+                    "pl": "Tak"
+                },
+                "no": {
+                    "pl": "Nie"
+                }
+            },
+            "texts": {
+                "members_added": {
+                    "pl": "Dodano rolę %s do %s użytkowników",
+                    "en": "Added role %s to %s members"
+                },
+                "members_ignored": {
+                    "pl": " (%s użytkowników już miało tą rolę)",
+                    "en": " (%s members already had this role)"
+                },
+                "bots_added": {
+                    "pl": " oraz %s botów",
+                    "en": " and %s bots"
+                },
+                "bots_ignored": {
+                    "pl": " (%s botów już miało tą rolę)",
+                    "en": " (%s bots already had this role)"
+                }
+            }
+        },
+        "set_alert_channel": {
+            "name": "",
+            "description": {
+                "pl": "Ustaw kanał na powiadomienia o zaproszeniach"
+            },
+            "options": {
+                "channel": {
+                    "pl": "Kanał na powiadomienia (ten kanał defaultowo)"
+                }
+            },
+            "texts": {
+                "response": {
+                    "pl": "Pomyślnie ustawiono kanał na %s",
+                    "en": "Successfully set the alert channel to %s"
+                }
+            }
+        },
+        "create_channel": {
+            "name": "",
+            "description": {
+                "pl": "Utwórz nowy kanał"
+            },
+            "options": {
+                "name": {
+                    "pl": "Nazwa kanału"
+                },
+                "channel_type": {
+                    "pl": "Typ kanału (TextChannel defaultowo)"
+                }
+            },
+            "texts": {
+                "response": {
+                    "pl": "Kanał %s został utworzony",
+                    "en": "Channel %s created"
+                }
+            }
+        },
+        "language": {
+            "name": "",
+            "description": {
+                "pl": "Ustaw swój język dla tego bota"
+            },
+            "options": {
+                "language": {
+                    "pl": "Język, który chcesz używać"
+                },
+                "en": {
+                    "pl": "Angielski"
+                },
+                "pl": {
+                    "pl": "Polski"
+                }
+            },
+            "texts": {
+                "current_language": {
+                    "pl": "Twój teraźniejszy język to 'Polski'",
+                    "en": "Your current language is 'English'"
+                },
+                "change_success": {
+                    "pl": "Pomyślnie ustawiono język na 'Polski'",
+                    "en": "Successfully set the language to 'English'"
+                }
+            }
+        },
+        "money show": {
+            "name": "",
+            "description": {
+                "pl": "Zobacz ilość pieniędzy na koncie"
+            },
+            "options": {
+                "user": {
+                    "pl": "Użytkownik, któremu chcesz sprawdzić ilośc pieniędzy"
+                }
+            },
+            "texts": {
+                "response": {
+                    "pl": "**Stan Konta: %s%s**\nPozycja: %s/%s",
+                    "en": "**Balance: %s%s**\nPlacement: %s/%s"
+                }
+            }
+        },
+        "money add": {
+            "name": "",
+            "description": {
+                "pl": "Dodaj pieniądze użytkownikowi (tylko dla adminów)"
+            },
+            "options": {
+                "money_amount": {
+                    "pl": "Ilość pieniędzy, jaką chcesz dodać"
+                },
+                "user": {
+                    "pl": "Użytkownik, któremu chcesz dodać pieniądze"
+                }
+            },
+            "texts": {
+                "response": {
+                    "pl": "Pomyślnie dodano %s%s użytkownikowi %s. Teraz ma %s%s",
+                    "en": "Successfully added %s%s to %s. Now at %s%s"
+                }
+            }
+        },
+        "money remove": {
+            "name": "",
+            "description": {
+                "pl": "Odejmij pieniądze użytkownikowi (tylko dla adminów)"
+            },
+            "options": {
+                "money_amount": {
+                    "pl": "Ilość pieniędzy, jaką chcesz odjąć"
+                },
+                "user": {
+                    "pl": "Użytkownik, któremu chcesz odjąć pieniądze"
+                }
+            },
+            "texts": {
+                "response": {
+                    "pl": "Pomyślnie odjęto %s%s użytkownikowi %s. Teraz ma %s%s",
+                    "en": "Successfully removed %s%s from %s. Now at %s%s"
+                }
+            }
+        },
+        "money pay": {
+            "name": "",
+            "description": {
+                "pl": "Zapłać użytkownikowi"
+            },
+            "options": {
+                "money_amount": {
+                    "pl": "Ilość pieniędzy, jaką chcesz zapłacić użytkownikowi"
+                },
+                "receiver": {
+                    "pl": "Użytkownik, któremu chcesz zapłacić"
+                }
+            },
+            "texts": {
+                "response": {
+                    "pl": "Pomyślnie zapłacono %s%s użytkownikowi %s. Teraz masz %s%s",
+                    "en": "Successfully payed %s%s to %s. You now have %s%s"
+                }
+            }
+        },
+        "money leaderboard": {
+            "name": "",
+            "description": {
+                "pl": "Pokazuje tabelę najbogatszych Mechów"
+            },
+            "options": {
+                "page": {
+                    "pl": "Strona którą chcesz zobaczyć (1 defaultowo)"
+                }
+            }
+        },
+        "shop list": {
+            "name": "",
+            "description": {
+                "pl": "Pokazuje rzeczy w sklepie"
+            },
+            "texts": {
+                "non-returnable": {
+                    "pl": "[bezzwrotne] ",
+                    "en": "[non-returnable] "
+                },
+                "title": {
+                    "pl": ":scales: Sklep Mechowy :scales:",
+                    "en": ":scales: Mech Shop :scales:"
+                }
+            }
+        },
+        "shop buy": {
+            "name": "",
+            "description": {
+                "pl": "Kup coś ze sklepu"
+            },
+            "options": {
+                "item": {
+                    "pl": "Nazwa rzeczy, którą chcesz kupić"
+                }
+            },
+            "texts": {
+                "response": {
+                    "pl": "Pomyślnie kupiono '%s'",
+                    "en": "Successfully purchased '%s'"
+                }
+            }
+        },
+        "shop return": {
+            "name": "",
+            "description": {
+                "pl": "Zwróć rzecz, którą kupiłeś/aś w sklepie"
+            },
+            "options": {
+                "item": {
+                    "pl": "Nazwa rzeczy, którą chcesz zwrócić (bezzwrotne rzeczy nie są na tej liście)"
+                }
+            },
+            "texts": {
+                "response": {
+                    "pl": "Pomyślnie zwrócono '%s'",
+                    "en": "Successfully returned '%s'"
+                }
+            }
+        },
+        "shop modify": {
+            "name": "",
+            "description": {
+                "pl": "Edytuj rzeczy w sklepie (tylko dla adminów). Zostaw pustą opcję aby zatrzymać stare ustawienia"
+            },
+            "options": { 
+                "action": {
+                    "pl": "Co chcesz zrobić?"
+                },
+                "item_name": {
+                    "pl": "Nazwa rzeczy [Z powodu bugu, podpowiedź nie działa]"
+                },
+                "price": {
+                    "pl": "Cena rzeczy"
+                },
+                "role": {
+                    "pl": "Rola którą chcesz sprzedać"
+                },
+                "description": {
+                    "pl": "Opis rzeczy"
+                },
+                "returnable": {
+                    "pl": "Czy ta rzecz ma być zwrotna? (Tak defaultowo)"
+                },
+                "remove_role": {
+                    "pl": "Czy chcesz usunąć rolę tej rzeczy? (tylko w trybie edycji | Nie defaultowo)"
+                },
+                "yes": {
+                    "pl": "Tak"
+                },
+                "no": {
+                    "pl": "Nie"
+                },
+                "add": {
+                    "pl": "Dodaj"
+                },
+                "edit": {
+                    "pl": "Edytuj"
+                },
+                "remove": {
+                    "pl": "Usuń"
+                }
+            },
+            "texts": {
+                "add_success": {
+                    "pl": "temp",
+                    "en": "Added '%s' to the shop! Details:\nprice = `%s`, \nrole = %s, \ndescription = '%s', \nretunable = `%s`)"
+                },
+                "no_description": {
+                    "pl": "Brak opisu",
+                    "en": "No description"
+                },
+                "no_role": {
+                    "pl": "`Brak roli`",
+                    "en": "`No role`"
+                },
+                "price_change": {
+                    "pl": "\nCena: `%s` -> `%s`",
+                    "en": "\nPrice: `%s` -> `%s`"
+                },
+                "role_change": {
+                    "pl": "\nRola: %s -> %s",
+                    "en": "\nRole: %s -> %s"
+                },
+                "description_change": {
+                    "pl": "\nOpis: `%s` -> `%s`",
+                    "en": "\nDescription: `%s` -> `%s`"
+                },
+                "returnable_change": {
+                    "pl": "\nBezzwrotność: `%s` -> `%s`",
+                    "en": "\nReturnable: `%s` -> `%s`"
+                },
+                "edit_success": {
+                    "pl": "Pomyślnie edytowano '%s'. Zmiany:%s",
+                    "en": "Successfully edited '%s'. Changes:%s"
+                },
+                "remove_success": {
+                    "pl": "Pomyślnie usunięto '%s' ze sklepu!",
+                    "en": "Successfully removed '%s' from the shop!"
+                }
+            }
+        },
+        "xp show": {
+            "name": "",
+            "description": {
+                "pl": "Pokazuje poziom i ilość xp"
+            },
+            "options": {
+                "user": {
+                    "pl": "Użytkownik, którego chcesz sprawdzić"
+                }
+            },
+            "texts": {
+                "lvl": {
+                    "pl": "**Level %s**",
+                    "en": "**Level %s**"
+                },
+                "xp": {
+                    "pl": "%s/%s xp",
+                    "en": "%s/%s xp"
+                },
+                "placement": {
+                    "pl": "Pozycja: %s/%s",
+                    "en": "Placement: %s/%s"
+                }
+            }
+        },
+        "xp add": {
+            "name": "",
+            "description": {
+                "pl": "Dodaj xp (tylko dla adminów)"
+            },
+            "options": {
+                "xp_amount": {
+                    "pl": "Ilość xp, jaką chcesz dodać"
+                },
+                "user": {
+                    "pl": "Użytkownik, któremu chcesz dodać xp"
+                }
+            },
+            "texts": {
+                "response": {
+                    "pl": "Pomyślnie dodano %s xp użytkownikowi %s. Teraz %s xp (%s lvl)",
+                    "en": "Successfully added %s xp to %s. Now at %s xp (%s lvl)"
+                }
+            }
+        },
+        "xp remove": {
+            "name": "",
+            "description": {
+                "pl": "Odejmij xp (tylko dla adminów)"
+            },
+            "options": {
+                "xp_amount": {
+                    "pl": "Ilość xp, jaką chcesz odjąć"
+                },
+                "user": {
+                    "pl": "Użytkownik, któremu chcesz odjąć xp"
+                }
+            },
+            "texts": {
+                "response": {
+                    "pl": "Pomyślnie odjęto %s xp użytkownikowi %s. Teraz %s xp (%s lvl)",
+                    "en": "Successfully removed %s xp from %s. Now at %s xp (%s lvl)"
+                }
+            }
+        },
+        "xp channel": {
+            "name": "",
+            "description": {
+                "pl": "Zmień ustawienia xp dla Kanału (tylko dla adminów)"
+            },
+            "options": {
+                "xp_amount": {
+                    "pl": "Ilość xp (`0` aby wyłączyć | `-1` aby ustawić na domyślne Kategorii)"
+                },
+                "channel": {
+                    "pl": "Kanał do konfiguracji (ten Kanał defaultowo)"
+                }
+            },
+            "texts": {
+                "negative_num": {
+                    "pl": "Nie można ustawić xp kanału na liczbę ujemną!",
+                    "en": "Cannot set channel's xp setting to a negative number!"
+                },
+                "success_default": {
+                    "pl": "Pomyślnie ustawiono xp kanału %s na ustawienia defaultowe kategorii (1 xp)",
+                    "en": "Successfully set channel %s's xp setting to Category's default (%s xp)"
+                },
+                "success_custom": {
+                    "pl": "Pomyślnie ustawiono xp kanału %s na %s xp",
+                    "en": "Successfully set channel %s's xp setting to %s xp"
+                }
+            }
+        },
+        "xp category": {
+            "name": "",
+            "description": {
+                "pl": "Zmień ustawienia xp dla Kategorii (tylko dla adminów)"
+            },
+            "options": {
+                "xp_amount": {
+                    "pl": "Ilość xp (`0` aby wyłączyć | `-1` aby ustawić na domyślne bota)"
+                },
+                "category": {
+                    "pl": "Kategoria do konfiguracji (ta kategoria defaultowo)"
+                }
+            },
+            "texts": {
+                "no_category": {
+                    "pl": "Ten kanał nie jest w żadnej kategorii!",
+                    "en": "This channel is not in any category!"
+                },
+                "negative_num": {
+                    "pl": "Nie można ustawić defaultowych ustawień kategorii na liczbę ujemną!",
+                    "en": "Cannot set category's default xp setting to a negative number!"
+                },
+                "success_default": {
+                    "pl": "Pomyślnie ustawiono defaultowe ustawienia kategorii %s na ustawienia defaultowe bota (1 xp)",
+                    "en": "Successfully set category %s's default xp setting to bot's default (1 xp)"
+                },
+                "success_custom": {
+                    "pl": "Pomyślnie ustawiono defaultowe ustawienia kategorii %s na %s xp",
+                    "en": "Successfully set category %s's default xp setting to %s xp"
+                }
+            }
+        },
+        "xp settings": {
+            "name": "",
+            "description": {
+                "pl": "Pokazuje wszystkie ustawienia xp (tylko dla adminów)"
+            },
+            "options": {
+                "channel_or_category": {
+                    "pl": "Którego Kanału/Kategorii chcesz zobaczyć ustawienia? (Wszystkie, jeżeli nie podasz)"
+                }
+            },
+            "texts": {
+                "no_category": {
+                    "pl": "Brak Kategorii",
+                    "en": "No Category"
+                }
+            }
+        },
+        "xp leaderboard": {
+            "name": "",
+            "description": {
+                "pl": "Pokazuje tabelę najbardziej doświadzczonych Mechów"
+            },
+            "options": {
+                "page": {
+                    "pl": "Strona którą chcesz zobaczyć (1 defaultowo)"
+                }
+            }
+        }
+    },
+    "groups": {
+        "money": {
+            "description": {
+                "pl": "Komendy związane z systemem pieniędzy"
+            }
+        },
+        "shop": {
+            "description": {
+                "pl": "Komendy związane ze sklepem"
+            }
+        },
+        "xp": {
+            "description": {
+                "pl": "Komendy związane z systemem xp"
+            }
+        }
+    },
+    "send_embed": {
+        "embeds_forbidden": {
+            "pl": "temp",
+            "en": "I can't send embeds. Check my pemissions!"
+        },
+        "messages_forbidden": {
+            "pl": "temp",
+            "en": "Hey, it looks like I can't send messages in channel %s in %s\nCould you notify the owner about this? :slight_smile: "
+        }
+    },
+    "get_placements_embed": {
+        "xp_title": {
+            "pl": "<a:EnchantedBook:893600426925101176> Tabela XP <a:EnchantedBook:893600426925101176>",
+            "en": "<a:EnchantedBook:893600426925101176> XP Leaderboard <a:EnchantedBook:893600426925101176>"
+        },
+        "money_title": {
+            "pl": ":moneybag: Tabela Pieniędzy :moneybag:",
+            "en": ":moneybag: Money Leaderboard :moneybag:"
+        },
+        "page": {
+            "pl": "Strona %s/%s",
+            "en": "Page %s/%s"
+        }
+    }
+}
