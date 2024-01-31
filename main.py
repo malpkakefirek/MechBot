@@ -444,5 +444,5 @@ async def unload_cogs(ctx):
 
 # =========SETUP========== #
 
-keep_alive()
+# keep_alive()
 bot.run(DISCORD_TOKEN)
