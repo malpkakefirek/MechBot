@@ -79,8 +79,6 @@ if __name__=='__main__':
 
 @bot.event
 async def on_ready():
-    global conn
-    conn.close()
     print(f"Logged in as {bot.user}\n\n====== INVITES ======")
 
     # print all invites from all guilds
@@ -93,7 +91,6 @@ async def on_ready():
 
     custom_activity = discord.Activity(type=2, name="/help")
     await bot.change_presence(activity=custom_activity)
-    conn = await aiosqlite.connect('mechbot.db')
 
 
 # ========== FUNCTIONS =========== #
@@ -114,7 +111,7 @@ async def on_member_join(member):
         print(f"I joined the server {member.guild.name}!")
         return
     
-    global conn
+    conn = await aiosqlite.connect('mechbot.db')
     cursor = await conn.cursor()
     await cursor.execute("BEGIN TRANSACTION")
     value = await select_value(cursor, 'invites')
@@ -261,7 +258,7 @@ async def on_member_remove(member):
         print(f"I left the server {member.guild.name}!")
         return
     
-    global conn
+    conn = await aiosqlite.connect('mechbot.db')
     cursor = await conn.cursor()
     await cursor.execute("BEGIN TRANSACTION")
     invites = await select_value(cursor, 'invites')
@@ -314,7 +311,7 @@ async def on_message(message):
     str_channel_id = str(message.channel.id)
     str_category_id = str(message.channel.category_id)
 
-    global conn
+    conn = await aiosqlite.connect('mechbot.db')
     cursor = await conn.cursor()
     await cursor.execute("BEGIN TRANSACTION")
     xp = await select_value(cursor, 'xp')
@@ -359,7 +356,7 @@ async def on_message(message):
             temp_xp[str_user_id] = str(round(float(temp_xp[str_user_id]) + float(str_xp_added), 1))
             print(f"Added {str_xp_added} xp to \"{message.author.name}\" in guild \"{message.guild.name}\" (now {xp[str_user_id]})")
 
-        await update_user_lvl_roles(message, bot, message.author, old_xp, float(xp[str_user_id]))
+        await update_user_lvl_roles(message, bot, message.author, old_xp, float(xp[str_user_id]), cursor)
 
         # add money for each 5 xp
         if float(temp_xp[str_user_id]) >= 5:

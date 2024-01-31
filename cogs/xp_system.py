@@ -13,13 +13,8 @@ from my_utils import Paginator, get_placement_sign, get_placements_embed, get_lv
 
 # =========FUNCTIONS========== #
 
-async def check_lvl_role_validity(ctx, user, new_lvl):
-    conn = await aiosqlite.connect('mechbot.db')
-    cursor = await conn.cursor()
+async def check_lvl_role_validity(ctx, user, new_lvl, cursor):
     lvl_roles = await select_value(cursor, 'lvl_roles')
-    await cursor.close()
-    await conn.close()
-
     lvl_role = ctx.guild.get_role(lvl_roles[str(new_lvl)])
     if lvl_role not in user.roles:
         try:
@@ -41,10 +36,8 @@ def get_required_xp_for_lvl(lvl: int):
     return 2**(lvl+2)
 
 
-async def update_user_lvl_roles(ctx, bot, user, old_xp, new_xp):
+async def update_user_lvl_roles(ctx, bot, user, old_xp, new_xp, cursor):
     async with lock:
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
         lvl_roles = await select_value(cursor, 'lvl_roles')
 
         old_lvl = get_lvl(old_xp)
@@ -69,19 +62,15 @@ async def update_user_lvl_roles(ctx, bot, user, old_xp, new_xp):
                         lvl_roles[str(i)] = temp_lvl_role.id
                         print(f"Created role \"[{i} LVL]\" in guild \"{ctx.guild.name}\"")
                     lvls_added.append(str(i))
-        new_lvl_role = ctx.guild.get_role(lvl_roles[str(new_lvl)])
-        old_lvl_role = ctx.guild.get_role(lvl_roles[str(old_lvl)])
-
         await update_value(cursor, 'lvl_roles', lvl_roles)
-        await conn.commit()
-        await cursor.close()
-        await conn.close()
 
         # return if levels didn't change
         if new_lvl == old_lvl:
-            await check_lvl_role_validity(ctx, user, new_lvl)
+            await check_lvl_role_validity(ctx, user, new_lvl, cursor)
             return
 
+        new_lvl_role = ctx.guild.get_role(lvl_roles[str(new_lvl)])
+        old_lvl_role = ctx.guild.get_role(lvl_roles[str(old_lvl)])
         await user.remove_roles(old_lvl_role)
         print(f"Removed role \"{old_lvl_role.name}\" from user \"{user.name}\" in guild \"{ctx.guild.name}\"")
         await user.add_roles(new_lvl_role)
@@ -131,15 +120,15 @@ class Xp(discord.Cog):
         ctx: commands.Context, 
         error: commands.CommandError
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        await cursor.close()
-        await conn.close()
-        errors = TRANSLATIONS['errors']
-        locale = locales.get(str(ctx.author.id), 'pl')
-
         if isinstance(error, commands.MissingPermissions):
+            conn = await aiosqlite.connect('mechbot.db')
+            cursor = await conn.cursor()
+            locales = await select_value(cursor, 'locales')
+            await cursor.close()
+            await conn.close()
+            errors = TRANSLATIONS['errors']
+            locale = locales.get(str(ctx.author.id), 'pl')
+
             response = errors['missing_permissions'][locale]
             placeholders = error.missing_permissions[0].upper()
             await ctx.respond(response % placeholders, ephemeral=True)
@@ -268,7 +257,7 @@ class Xp(discord.Cog):
         else:
             old_xp = 0
             xp[str(user.id)] = str(xp_amount)
-        await update_user_lvl_roles(ctx, self.bot, user, old_xp, float(xp[str(user.id)]))
+        await update_user_lvl_roles(ctx, self.bot, user, old_xp, float(xp[str(user.id)]), cursor)
         await update_value(cursor, 'xp', xp)
         await conn.commit()
         await cursor.close()
@@ -324,7 +313,7 @@ class Xp(discord.Cog):
         else:
             old_xp = 0
             xp[str(user.id)] = str(0)
-        await update_user_lvl_roles(ctx, self.bot, user, old_xp, float(xp[str(user.id)]))
+        await update_user_lvl_roles(ctx, self.bot, user, old_xp, float(xp[str(user.id)]), cursor)
         await update_value(cursor, 'xp', xp)
         await conn.commit()
         await cursor.close()

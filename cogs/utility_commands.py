@@ -1,13 +1,11 @@
 import discord
 from discord.ext import commands
 import aiosqlite
-from handle_database import select_value, update_value
+from handle_database import select_value, update_value, select_value_sync
 
 from my_utils import NO_MENTIONS, TRANSLATIONS
 
 # =========STATIC VARIABLES========== #
-
-conn = aiosqlite.connect('mechbot.db')
 
 # =========FUNCTIONS========== #
 
@@ -16,9 +14,11 @@ conn = aiosqlite.connect('mechbot.db')
 class Utility(commands.Cog):
     """Komendy użytkowe"""
     def __init__(self, bot):
+        import sqlite3
+        conn = sqlite3.connect('mechbot.db')
         cursor = conn.cursor()
         self.bot = bot
-        self.bot.owner_ids = select_value(cursor, 'permitted')
+        self.bot.owner_ids = select_value_sync(cursor, 'permitted')
         cursor.close()
         conn.close()
     
@@ -77,7 +77,7 @@ class Utility(commands.Cog):
         lvl_roles = await select_value(cursor, 'lvl_roles')
         for role in [role for role in ctx.guild.roles if role.name.endswith(" LVL]")]:
             await role.delete()
-        await update_user_lvl_roles(cursor, 'lvl_roles', dict())
+        await update_value(cursor, 'lvl_roles', dict())
         await conn.commit()
         await cursor.close()
         await conn.close()
