@@ -1,7 +1,8 @@
 import discord
 from discord.errors import Forbidden
-from replit import db
+import aiosqlite
 
+from handle_database import select_value
 from my_utils import TRANSLATIONS
 
 # from main import test_guilds
@@ -59,16 +60,19 @@ class Help(discord.Cog):
     ):
         prefix = "/"
         secondary_prefix = "$"
-        version = "beta 2.0"
+        version = "beta 2.2"
 
-        locales = db['locales']
+        conn = await aiosqlite.connect('mechbot.db')
+        cursor = await conn.cursor()
+        locales = await select_value(cursor, 'locales')
         commands = TRANSLATIONS['commands']
         command_texts = commands['help']['texts']
         locale = locales.get(str(ctx.author.id), 'pl')
 
         # setting owner name
         owner_id = 336475402535174154
-        owner_ids = db['permitted']
+        owner_ids = await select_value(cursor, 'permitted')
+        await cursor.close()
         try:
             owner_name = str(self.bot.get_user(owner_id))
         except Exception:

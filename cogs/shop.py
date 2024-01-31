@@ -4,7 +4,9 @@ import discord
 from discord.ext import commands
 from discord.commands import SlashCommandGroup
 # from discord.errors import Forbidden
-from replit import db
+import aiosqlite
+from handle_database import select_value, update_value, select_value_sync
+import json
 # from math import ceil
 # import time
 
@@ -15,8 +17,21 @@ from my_utils import CURRENCY_NAME, NO_MENTIONS, TRANSLATIONS
 # =========FUNCTIONS========== #
 
 # db['shop'] = {'some item name': {'price': int, 'role_id': Optional[int], 'description': str, 'returnable': bool}, ...}
-def get_shop_autocomplete(ctx: discord.AutocompleteContext):
-    return list(db['shop'])
+async def get_shop_autocomplete(ctx: discord.AutocompleteContext):
+    conn = await aiosqlite.connect('mechbot.db')
+    cursor = await conn.cursor()
+    shop = await select_value(cursor, 'shop')
+    await cursor.close()
+    await conn.close()
+    return shop
+
+def get_shop_list():
+    import sqlite3
+    conn_temp = sqlite3.connect('mechbot.db')
+    cursor = conn_temp.cursor()
+    cursor.execute("SELECT value FROM mechy WHERE key = 'shop'")
+    return json.loads(cursor.fetchone()[0])
+shop_choices = get_shop_list()
 
 # =========CLASSES========== #
 
@@ -58,7 +73,11 @@ class Shop(discord.Cog):
 
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
-        locales = db['locales']
+        conn = await aiosqlite.connect('mechbot.db')
+        cursor = await conn.cursor()
+        locales = await select_value(cursor, 'locales')
+        await cursor.close()
+        await conn.close()
         errors = TRANSLATIONS['errors']
         locale = locales.get(str(ctx.author.id), 'pl')
 
@@ -80,11 +99,15 @@ class Shop(discord.Cog):
         self,
         ctx,
     ):
-        locales = db['locales']
+        conn = await aiosqlite.connect('mechbot.db')
+        cursor = await conn.cursor()
+        locales = await select_value(cursor, 'locales')
         command_texts = TRANSLATIONS['commands']['shop list']['texts']
         locale = locales.get(str(ctx.author.id), 'pl')
 
-        shop = db['shop']
+        shop = await select_value(cursor, 'shop')
+        await cursor.close()
+        await conn.close()
         text = ""
         for item_name in shop:
             price = shop[item_name]['price']
@@ -114,20 +137,23 @@ class Shop(discord.Cog):
         "item",
         description="Name of the item you want to purchase",
         description_localizations=TRANSLATIONS['commands']['shop buy']['options']['item'],
-        choices=list(db['shop']),
+        choices=list(shop_choices),
     )
     async def shop_buy(
         self,
         ctx: discord.ApplicationContext,
         item: str,
     ):
-        locales = db['locales']
+        conn = await aiosqlite.connect('mechbot.db')
+        cursor = await conn.cursor()
+        locales = await select_value(cursor, 'locales')
         command_texts = TRANSLATIONS['commands']['shop buy']['texts']
         errors = TRANSLATIONS['errors']
         locale = locales.get(str(ctx.author.id), 'pl')
 
-        money = db['money']
-        shop = db['shop']
+        await cursor.execute("BEGIN TRANSACTION")
+        money = await select_value(cursor, 'money')
+        shop = await select_value(cursor, 'shop')
         item = item.lower()
         item_details = shop[item]
         if str(ctx.author.id) not in money or money[str(ctx.author.id)] < item_details['price']:
@@ -152,7 +178,10 @@ class Shop(discord.Cog):
             await ctx.respond("This feature is not yet implemented!")
             return
         money[str(ctx.author.id)] -= item_details['price']
-        db['money'] = money
+        await update_value(cursor, 'money', money)
+        await conn.commit()
+        await cursor.close()
+        await conn.close()
 
         response = command_texts['response'][locale]
         await ctx.respond(response % item)
@@ -168,20 +197,23 @@ class Shop(discord.Cog):
         str,
         description="Name of the item you want to return (non-returnable items aren't on this list)",
         description_localizations=TRANSLATIONS['commands']['shop return']['options']['item'],
-        choices=[item for item, description in db['shop'].items() if description['returnable']],
+        choices=[item for item, description in shop_choices.items() if description['returnable']],
     )
     async def shop_return(
         self,
         ctx,
         item: str,
     ):
-        locales = db['locales']
+        conn = await aiosqlite.connect('mechbot.db')
+        cursor = await conn.cursor()
+        locales = await select_value(cursor, 'locales')
         command_texts = TRANSLATIONS['commands']['shop return']['texts']
         errors = TRANSLATIONS['errors']
         locale = locales.get(str(ctx.author.id), 'pl')
 
-        money = db['money']
-        shop = db['shop']
+        await cursor.execute("BEGIN TRANSACTION")
+        money = await select_value(cursor, 'money')
+        shop = await select_value(cursor, 'shop')
         item = item.lower()
         item_details = shop[item]
         if str(ctx.author.id) not in money:
@@ -204,7 +236,10 @@ class Shop(discord.Cog):
             await ctx.respond("This feature is not yet implemented!")
             return
         money[str(ctx.author.id)] += item_details['price']
-        db['money'] = money
+        await update_value(cursor, 'money', money)
+        await conn.commit()
+        await cursor.close()
+        await conn.close()
 
         response = command_texts['response'][locale]
         await ctx.respond(response % item)
@@ -308,21 +343,32 @@ class Shop(discord.Cog):
             default=0,
         ),
     ):
-        locales = db['locales']
+        conn = await aiosqlite.connect('mechbot.db')
+        cursor = await conn.cursor()
+        locales = await select_value(cursor, 'locales')
         command_texts = TRANSLATIONS['commands']['shop modify']['texts']
         errors = TRANSLATIONS['errors']
         locale = locales.get(str(ctx.author.id), 'pl')
 
-        shop = db['shop']
+        await cursor.execute("BEGIN TRANSACTION")
+        shop = await select_value(cursor, 'shop')
         item_name = item_name.lower()
 
         if action == "Add":
             if item_name in shop:
+                await conn.commit()
+                await cursor.close()
+                await conn.close()
+
                 response = errors['item_already_exists'][locale]
                 await ctx.respond(response % item_name, ephemeral=True)
                 return
 
             if price is None:
+                await conn.commit()
+                await cursor.close()
+                await conn.close()
+
                 response = errors['price_not_provided'][locale]
                 await ctx.respond(response, ephemeral=True)
                 return
@@ -338,7 +384,10 @@ class Shop(discord.Cog):
                 'description': description,
                 'returnable': returnable,
             }
-            db['shop'] = shop
+            await update_value(cursor, 'shop', shop)
+            await conn.commit()
+            await cursor.close()
+            await conn.close()
             response = command_texts['add_success'][locale]
             placeholders = (item_name, price, role_mention, description, returnable)
             await ctx.respond(response % placeholders, allowed_mentions=NO_MENTIONS)
@@ -346,6 +395,10 @@ class Shop(discord.Cog):
 
         if action == "Edit":
             if item_name not in list(shop):
+                await conn.commit()
+                await cursor.close()
+                await conn.close()
+
                 response = errors['item_doesnt_exist'][locale]
                 await ctx.respond(response % item_name, ephemeral=True)
                 return
@@ -398,7 +451,11 @@ class Shop(discord.Cog):
                 changes += response % placeholders
                 shop[item_name]['returnable'] = returnable
 
-            db['shop'] = shop
+            await update_value(cursor, 'shop', shop)
+            await conn.commit()
+            await cursor.close()
+            await conn.close()
+
             response = command_texts['edit_success'][locale]
             placeholders = (item_name, changes)
             await ctx.respond(response % placeholders, allowed_mentions=NO_MENTIONS)
@@ -406,16 +463,28 @@ class Shop(discord.Cog):
 
         if action == "Remove":
             if item_name not in shop:
+                await conn.commit()
+                await cursor.close()
+                await conn.close()
+
                 response = errors['item_doesnt_exist'][locale]
                 await ctx.respond(response % item_name, ephemeral=True)
                 return
 
             del shop[item_name]
+            await update_value(cursor, 'shop', shop)
+            await conn.commit()
+            await cursor.close()
+            await conn.close()
+
             response = command_texts['remove_success'][locale]
             await ctx.respond(response % item_name)
             return
 
         # when none of the ifs get caught
+        await conn.commit()
+        await cursor.close()
+        await conn.close()
         await ctx.respond("?????")
         return
 

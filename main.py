@@ -1,10 +1,13 @@
 import os
-from replit import db
 import discord
 from discord.ext import commands
+import sqlite3
+import aiosqlite
+from dotenv import load_dotenv
 
 from keep_alive import keep_alive
 from initialize_database import initialize_database
+from handle_database import select_value, update_value, select_value_sync, update_value_sync
 from cogs.xp_system import update_user_lvl_roles
 
 # import tracemalloc
@@ -12,9 +15,11 @@ from cogs.xp_system import update_user_lvl_roles
 
 # ========== START =========== #
 
+load_dotenv()
 
 # Create all missing databases
-initialize_database()
+conn = sqlite3.connect('mechbot.db')
+initialize_database(conn)
 
 
 # ========== STATIC VARIABLES =========== #
@@ -35,13 +40,16 @@ bot = commands.Bot(command_prefix="$", intents=intents, help_command=None)
 previous_invitations = dict()
 
 # Give default owner permission, if he doesn't have it already
-owner_ids = db['permitted']
+cursor = conn.cursor()
+owner_ids = select_value_sync(cursor, 'permitted')
 
 
 if OWNER_ID not in owner_ids:
     owner_ids.append(OWNER_ID)
-    db['permitted'] = owner_ids
+    update_value_sync(cursor, 'permitted', owner_ids)
+    conn.commit()
     print("\nADDED MALPKAKEFIREK AS THE OWNER\n")
+cursor.close()
 
 
 # ========== LOADING COGS =========== #
@@ -71,6 +79,8 @@ if __name__=='__main__':
 
 @bot.event
 async def on_ready():
+    global conn
+    conn.close()
     print(f"Logged in as {bot.user}\n\n====== INVITES ======")
 
     # print all invites from all guilds
@@ -83,9 +93,8 @@ async def on_ready():
 
     custom_activity = discord.Activity(type=2, name="/help")
     await bot.change_presence(activity=custom_activity)
+    conn = await aiosqlite.connect('mechbot.db')
 
-    matches = db.prefix("")
-    print(f"====== DATABASE ======\n{matches}")
 
 # ========== FUNCTIONS =========== #
 
@@ -104,14 +113,18 @@ async def on_member_join(member):
     if member == bot.user:
         print(f"I joined the server {member.guild.name}!")
         return
-    value = db['invites']
+    
+    global conn
+    cursor = await conn.cursor()
+    await cursor.execute("BEGIN TRANSACTION")
+    value = await select_value(cursor, 'invites')
 
     # if the guild never had any invites
     if str(member.guild.id) not in value:
         value[str(member.guild.id)] = dict()
         print("assigned guild to invites dict")
 
-    db['invites'] = value
+    await update_value(cursor, 'invites', value)
 
     # get invites' uses before join
     invites_before_join = previous_invitations[str(member.guild.id)]
@@ -135,8 +148,8 @@ async def on_member_join(member):
 
     # fetch my profile (disabled)
     # malpka = await member.guild.fetch_member(336475402535174154)
-    money = db['money']
-    alert_channel_id = db['alert_channel']
+    money = await select_value(cursor, 'money')
+    alert_channel_id = int(await select_value(cursor, 'alert_channel'))
 
     # if user is a bot
     if member.bot:
@@ -144,6 +157,8 @@ async def on_member_join(member):
         await member.guild.get_channel(alert_channel_id).send(
             f"Pominięto przypisanie mech coinów za zaproszenie użytkownika {member.mention}, ponieważ to jest bot."
         )
+        await conn.commit()
+        await cursor.close()
         return
     
     # find the used invite
@@ -156,15 +171,17 @@ async def on_member_join(member):
         print(f"old invite used for {member.name}")
 
         # attach an invite to member id
-        value = db['invites']
-        value[str(member.id)] = [inv.code, inv.inviter.name, inv.inviter.id]
-        db['invites'] = value
+        invites = await select_value(cursor, 'invites')
+        invites[str(member.id)] = [inv.code, inv.inviter.name, inv.inviter.id]
+        await update_value(cursor, 'invites', invites)
 
         # update invites' num of uses
         previous_invitations[str(member.guild.id)] = invites_after_join
 
         # if member invited himself, don't give money
         if member.id == inv.inviter.id:
+            await conn.commit()
+            await cursor.close()
             return
 
         # add money
@@ -172,6 +189,9 @@ async def on_member_join(member):
             money[str(inv.inviter.id)] += 50
         else:
             money[str(inv.inviter.id)] = 50
+        await update_value(cursor, 'money', money)
+        await conn.commit()
+        await cursor.close()
 
         # send all alerts
         print(f"Added 50 money to user {inv.inviter.name} for inviting {member.name} (now at {money[str(inv.inviter.id)]})")
@@ -188,15 +208,17 @@ async def on_member_join(member):
             print("new invite used")
 
             # attach an invite to member id
-            value = db['invites']
-            value[str(member.id)] = [inv.code, inv.inviter.name, inv.inviter.id]
-            db['invites'] = value
+            invites = await select_value(cursor, 'invites')
+            invites[str(member.id)] = [inv.code, inv.inviter.name, inv.inviter.id]
+            await update_value(cursor, 'invites', invites)
 
             # update invites' num of uses
             previous_invitations[str(member.guild.id)] = invites_after_join
 
             # if member invited himself, don't give money
             if member.id == inv.inviter.id:
+                await conn.commit()
+                await cursor.close()
                 return
 
             # add money
@@ -204,6 +226,9 @@ async def on_member_join(member):
                 money[str(inv.inviter.id)] += 50
             else:
                 money[str(inv.inviter.id)] = 50
+            await update(cursor, 'money', money)
+            await conn.commit()
+            await cursor.close()
 
             # send all alerts
             print(f"Added 50 money to user {inv.inviter.name} for inviting {member.name} (now at {money[str(inv.inviter.id)]})")
@@ -214,6 +239,8 @@ async def on_member_join(member):
             return
 
         else:
+            await conn.commit()
+            await cursor.close()
             # send all alerts
             print(f"Couldn't add money for inviting `{member.name}`, because invite was single use")
             # (disabled)
@@ -234,17 +261,20 @@ async def on_member_remove(member):
         print(f"I left the server {member.guild.name}!")
         return
     
-    invites = db['invites']
+    global conn
+    cursor = await conn.cursor()
+    await cursor.execute("BEGIN TRANSACTION")
+    invites = await select_value(cursor, 'invites')
     # fetch my profile (disabled)
     # malpka = await member.guild.fetch_member(336475402535174154)
-    alert_channel_id = db['alert_channel']
+    alert_channel_id = int(await select_value(cursor, 'alert_channel'))
 
     # remove money from inviter if invitee leaves
     if str(member.id) in invites:
-        money = db['money']
+        money = await select_value(cursor, 'money')
         inviter_id = invites[str(member.id)][2]
         money[str(inviter_id)] -= 50
-        db['money'] = money
+        await update_value(cursor, 'money', money)
 
         print(f"REMOVED 50 MONEY FROM {bot.get_user(inviter_id).name} (now {money[str(inviter_id)]})")
         # disabled
@@ -258,6 +288,8 @@ async def on_member_remove(member):
     else:
         print(f"{member.name} left the server")
         await member.guild.get_channel(alert_channel_id).send(f"Nie usunięto mech coinów, ponieważ brak zaproszenia dla użytkownika `{member.name}`!")
+    await conn.commit()
+    await cursor.close()
 
 
 @bot.event
@@ -282,11 +314,14 @@ async def on_message(message):
     str_channel_id = str(message.channel.id)
     str_category_id = str(message.channel.category_id)
 
-    xp = db['xp']
-    temp_xp = db['temp_xp']
-    money = db['money']
-    xp_channel_settings = db['xp_channel_settings']
-    xp_category_settings = db['xp_category_settings']
+    global conn
+    cursor = await conn.cursor()
+    await cursor.execute("BEGIN TRANSACTION")
+    xp = await select_value(cursor, 'xp')
+    temp_xp = await select_value(cursor, 'temp_xp')
+    money = await select_value(cursor, 'money')
+    xp_channel_settings = await select_value(cursor, 'xp_channel_settings')
+    xp_category_settings = await select_value(cursor, 'xp_category_settings')
 
     # == XP == #
     if message.channel.type == discord.ChannelType.text:
@@ -331,9 +366,11 @@ async def on_message(message):
             money[str_user_id] += int(float(temp_xp[str_user_id]) / 5)    # division without the remainder
             temp_xp[str_user_id] = str(float(temp_xp[str_user_id]) % 5)    # leave the remainder from division in temp_xp
 
-        db['temp_xp'] = temp_xp
-        db['money'] = money
-        db['xp'] = xp
+        await update_value(cursor, 'temp_xp', temp_xp)
+        await update_value(cursor, 'money', money)
+        await update_value(cursor, 'xp', xp)
+        await conn.commit()
+        await cursor.close()
 
     await bot.process_commands(message)
 

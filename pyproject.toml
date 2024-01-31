@@ -1,12 +1,11 @@
 [tool.poetry]
 name = "MechBot"
-version = "2.1.0"
+version = "2.2.0"
 description = ""
 authors = ["Malpkakefirek"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-replit = "^3.2.4"
 backoff = "^1.10.0"
 flask = "^2.0.0"
 py-cord = "^2.2.2"
