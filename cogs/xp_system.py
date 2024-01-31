@@ -46,8 +46,6 @@ async def update_user_lvl_roles(ctx, bot, user, old_xp, new_xp):
         conn = await aiosqlite.connect('mechbot.db')
         cursor = await conn.cursor()
         lvl_roles = await select_value(cursor, 'lvl_roles')
-        await cursor.close()
-        await conn.close()
 
         old_lvl = get_lvl(old_xp)
         new_lvl = get_lvl(new_xp)
@@ -90,15 +88,19 @@ async def update_user_lvl_roles(ctx, bot, user, old_xp, new_xp):
             new_lvl_role = ctx.guild.get_role(lvl_roles[str(new_lvl)])
         old_lvl_role = ctx.guild.get_role(lvl_roles[str(old_lvl)])
 
+        await update_value(cursor, 'lvl_roles', lvl_roles)
+        await cursor.close()
+        await conn.close()
+
         # return if levels didn't change
         if new_lvl == old_lvl:
             await check_lvl_role_validity(ctx, user, new_lvl)
             return
 
-        await ctx.author.remove_roles(old_lvl_role)
-        print(f"Removed role \"{old_lvl_role.name}\" from user \"{ctx.author.name}\" in guild \"{ctx.guild.name}\"")
-        await ctx.author.add_roles(new_lvl_role)
-        print(f"Added role \"{new_lvl_role.name}\" to user \"{ctx.author.name}\" in guild \"{ctx.guild.name}\"")
+        await user.remove_roles(old_lvl_role)
+        print(f"Removed role \"{old_lvl_role.name}\" from user \"{user.name}\" in guild \"{ctx.guild.name}\"")
+        await user.add_roles(new_lvl_role)
+        print(f"Added role \"{new_lvl_role.name}\" to user \"{user.name}\" in guild \"{ctx.guild.name}\"")
 
 # =========CLASSES========== #
 
@@ -268,6 +270,7 @@ class Xp(discord.Cog):
         locale = locales.get(str(ctx.author.id), 'pl')
 
         if user is None:
+            print("no user provided")
             user = ctx.author
 
         await cursor.execute("BEGIN TRANSACTION")
