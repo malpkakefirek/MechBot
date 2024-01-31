@@ -55,7 +55,7 @@ async def update_user_lvl_roles(ctx, bot, user, old_xp, new_xp):
         if str(new_lvl) not in lvl_roles:
             # create all lvl roles below new_lvl_role that are missing
             guild_lvl_roles = [role for role in ctx.guild.roles if role.name.endswith(" LVL]")]
-            for i in range(len(lvl_roles) + 1, new_lvl):
+            for i in range(len(lvl_roles) + 1, new_lvl + 1):
                 if str(i) not in lvl_roles:
                     role_id_list = [role.id for role in guild_lvl_roles if role.name == f"[{i} LVL]"]
                     if role_id_list:
@@ -69,26 +69,11 @@ async def update_user_lvl_roles(ctx, bot, user, old_xp, new_xp):
                         lvl_roles[str(i)] = temp_lvl_role.id
                         print(f"Created role \"[{i} LVL]\" in guild \"{ctx.guild.name}\"")
                     lvls_added.append(str(i))
-            guild_lvl_roles = [role for role in ctx.guild.roles if role.name.endswith(" LVL]")]
-            role_id_list = [role.id for role in guild_lvl_roles if role.name == f"[{new_lvl} LVL]"]
-            if role_id_list:
-                lvl_roles[str(new_lvl)] = role_id_list[0]
-                print(f"Role \"[{new_lvl} LVL]\" already existed in guild \"{ctx.guild.name}\"")
-            else:
-                # create new_lvl_role
-                new_lvl_role = await ctx.guild.create_role(
-                    name=f"[{new_lvl} LVL]",
-                    color=discord.Colour.purple()
-                )
-                print(f"Created role \"[{new_lvl} LVL]\" in guild \"{ctx.guild.name}\"")
-                lvl_roles[str(new_lvl)] = new_lvl_role.id
-            lvls_added.append(str(new_lvl))
-        # if new lvl role already exists
-        else:
-            new_lvl_role = ctx.guild.get_role(lvl_roles[str(new_lvl)])
+        new_lvl_role = ctx.guild.get_role(lvl_roles[str(new_lvl)])
         old_lvl_role = ctx.guild.get_role(lvl_roles[str(old_lvl)])
 
         await update_value(cursor, 'lvl_roles', lvl_roles)
+        await conn.commit()
         await cursor.close()
         await conn.close()
 
