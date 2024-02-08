@@ -62,7 +62,7 @@ async def update_user_lvl_roles(ctx, bot, user, old_xp, new_xp, cursor):
                         lvl_roles[str(i)] = temp_lvl_role.id
                         print(f"Created role \"[{i} LVL]\" in guild \"{ctx.guild.name}\"")
                     lvls_added.append(str(i))
-        await update_value(cursor, 'lvl_roles', lvl_roles)
+            await update_value(cursor, 'lvl_roles', lvl_roles)
 
         # return if levels didn't change
         if new_lvl == old_lvl:
@@ -358,7 +358,7 @@ class Xp(discord.Cog):
         if channel is None:
             channel = ctx.channel
 
-        await cursor.execute("TRANSACTION BEGIN")
+        await cursor.execute("BEGIN TRANSACTION")
         xp_channel_settings = await select_value(cursor, 'xp_channel_settings')
         xp_category_settings = await select_value(cursor, 'xp_category_settings')
 
@@ -435,7 +435,7 @@ class Xp(discord.Cog):
                 return
             category = ctx.channel.category
 
-        await cursor.execute("TRANSACTION BEGIN")
+        await cursor.execute("BEGIN TRANSACTION")
         xp_category_settings = await select_value(cursor, 'xp_category_settings')
 
         if xp_amount == -1:

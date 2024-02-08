@@ -223,7 +223,7 @@ async def on_member_join(member):
                 money[str(inv.inviter.id)] += 50
             else:
                 money[str(inv.inviter.id)] = 50
-            await update(cursor, 'money', money)
+            await update_value(cursor, 'money', money)
             await conn.commit()
             await cursor.close()
 
@@ -311,17 +311,19 @@ async def on_message(message):
     str_channel_id = str(message.channel.id)
     str_category_id = str(message.channel.category_id)
 
-    conn = await aiosqlite.connect('mechbot.db')
-    cursor = await conn.cursor()
-    await cursor.execute("BEGIN TRANSACTION")
-    xp = await select_value(cursor, 'xp')
-    temp_xp = await select_value(cursor, 'temp_xp')
-    money = await select_value(cursor, 'money')
-    xp_channel_settings = await select_value(cursor, 'xp_channel_settings')
-    xp_category_settings = await select_value(cursor, 'xp_category_settings')
+    async with aiosqlite.connect('mechbot.db') as conn:
+        cursor = await conn.cursor()
+        await cursor.execute("BEGIN TRANSACTION")
+        xp = await select_value(cursor, 'xp')
+        temp_xp = await select_value(cursor, 'temp_xp')
+        money = await select_value(cursor, 'money')
+        xp_channel_settings = await select_value(cursor, 'xp_channel_settings')
+        xp_category_settings = await select_value(cursor, 'xp_category_settings')
 
-    # == XP == #
-    if message.channel.type == discord.ChannelType.text:
+        # == XP == #
+        if message.channel.type != discord.ChannelType.text:
+            return
+
         # channel's xp setting
         if str_channel_id in xp_channel_settings:
             str_xp_added = str(xp_channel_settings[str_channel_id])
@@ -336,11 +338,6 @@ async def on_message(message):
         if str_user_id not in xp:
             xp[str_user_id] = str(0)
             print(f"First message for user {message.author.name} ({str_user_id}) [xp]")
-            # try:
-            #     await message.author.add_roles(message.guild.get_role(lvl_roles['1']))
-            # except Exception as e:
-            #     print("Could not add a role:")
-            #     print(e)
 
         if str_user_id not in temp_xp:
             temp_xp[str_user_id] = str(0)
@@ -354,9 +351,6 @@ async def on_message(message):
         if float(str_xp_added) > 0:
             xp[str_user_id] = str(round(float(xp[str_user_id]) + float(str_xp_added), 1))
             temp_xp[str_user_id] = str(round(float(temp_xp[str_user_id]) + float(str_xp_added), 1))
-            print(f"Added {str_xp_added} xp to \"{message.author.name}\" in guild \"{message.guild.name}\" (now {xp[str_user_id]})")
-
-        await update_user_lvl_roles(message, bot, message.author, old_xp, float(xp[str_user_id]), cursor)
 
         # add money for each 5 xp
         if float(temp_xp[str_user_id]) >= 5:
@@ -367,7 +361,15 @@ async def on_message(message):
         await update_value(cursor, 'money', money)
         await update_value(cursor, 'xp', xp)
         await conn.commit()
+
+        if float(str_xp_added) > 0:
+            print(f"Added {str_xp_added} xp to \"{message.author.name}\" in guild \"{message.guild.name}\" (now {xp[str_user_id]})")
+
+        await cursor.execute("BEGIN TRANSACTION")
+        await update_user_lvl_roles(message, bot, message.author, old_xp, float(xp[str_user_id]), cursor)
+        await conn.commit()
         await cursor.close()
+
 
     await bot.process_commands(message)
 
