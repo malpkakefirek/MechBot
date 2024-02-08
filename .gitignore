@@ -2,3 +2,6 @@
 !.gitignore
 *.pyc
 __pycache__
+ets
+mechbot.db
+db\ copy.json
