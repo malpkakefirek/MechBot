@@ -1,16 +1,17 @@
 """Utilites for my bot"""
+from handle_database import select_value    # , update_value
 
 from math import ceil
 import json
 import discord
 import aiosqlite
-from handle_database import select_value, update_value
 
 with open('translations.json', 'r') as file:
     TRANSLATIONS = json.load(file)
 
 CURRENCY_NAME = " mech coins"
 NO_MENTIONS = discord.AllowedMentions().none()
+
 
 class LeftButton(discord.ui.Button):
     """Left button for Paginator"""

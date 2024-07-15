@@ -9,6 +9,7 @@ from my_utils import NO_MENTIONS, TRANSLATIONS
 
 # =========FUNCTIONS========== #
 
+
 # =========CLASSES========== #
 
 class Utility(commands.Cog):
@@ -21,9 +22,9 @@ class Utility(commands.Cog):
         self.bot.owner_ids = select_value_sync(cursor, 'permitted')
         cursor.close()
         conn.close()
-    
+
     # =========EVENTS========== #
-    
+
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         conn = await aiosqlite.connect('mechbot.db')
         cursor = await conn.cursor()
@@ -32,16 +33,16 @@ class Utility(commands.Cog):
         await conn.close()
         errors = TRANSLATIONS['errors']
         locale = locales.get(str(ctx.author.id), 'pl')
-    
+
         if isinstance(error, commands.MissingPermissions):
             response = errors['missing_permissions'][locale]
             placeholders = error.missing_permissions[0].upper()
             await ctx.respond(response % placeholders, ephemeral=True)
             return
         raise error  # Here we raise other errors to ensure they aren't ignored
-    
+
     # =========COMMANDS========== #
-    
+
     @commands.slash_command(
         name="funfact",
         description="Shows a funfact about the bot",
@@ -55,10 +56,10 @@ class Utility(commands.Cog):
         await conn.close()
         command_texts = TRANSLATIONS['commands']['funfact']['texts']
         locale = locales.get(str(ctx.author.id), 'pl')
-    
+
         await ctx.respond(command_texts['response'][locale])
-    
-    
+
+
     @commands.slash_command(
         name="delete_lvl_roles",
         description="Delete all level roles",
@@ -72,9 +73,9 @@ class Utility(commands.Cog):
         locales = await select_value(cursor, 'locales')
         command_texts = TRANSLATIONS['commands']['delete_lvl_roles']['texts']
         locale = locales.get(str(ctx.author.id), 'pl')
-    
+
         await cursor.execute("BEGIN TRANSACTION")
-        lvl_roles = await select_value(cursor, 'lvl_roles')
+        lvl_roles = await select_value(cursor, 'lvl_roles')     # TODO delete roles from this list
         for role in [role for role in ctx.guild.roles if role.name.endswith(" LVL]")]:
             await role.delete()
         await update_value(cursor, 'lvl_roles', dict())
@@ -82,8 +83,8 @@ class Utility(commands.Cog):
         await cursor.close()
         await conn.close()
         await ctx.respond(command_texts['response'][locale])
-    
-    
+
+
     @commands.slash_command(
         name="give_everyone_role",
         description="Give a role to every user with a specified role",
@@ -132,13 +133,13 @@ class Utility(commands.Cog):
         command_texts = TRANSLATIONS['commands']['give_everyone_role']['texts']
         errors = TRANSLATIONS['errors']
         locale = locales.get(str(ctx.author.id), 'pl')
-    
+
         if not role_to_give.is_assignable():
             text = errors['role_hierarchy'][locale]
             response = text % (role_to_give.mention, ctx.guild.me.top_role.mention)
             await ctx.respond(response, allowed_mentions=NO_MENTIONS)
             return
-    
+
         if not give_to_roles:
             give_to_roles = ctx.guild.default_role
         members_given_role_amount = 0
@@ -163,7 +164,7 @@ class Utility(commands.Cog):
                     members_given_role_amount += 1
                     continue
                 members_ignored_amount += 1
-    
+
         response = command_texts['members_added'][locale] % (role_to_give.mention, members_given_role_amount)
         if members_ignored_amount:
             response += command_texts['members_ignored'][locale] % members_ignored_amount
@@ -172,8 +173,8 @@ class Utility(commands.Cog):
             if bots_ignored_amount:
                 response += command_texts['bots_ignored'][locale] % bots_ignored_amount
         await ctx.respond(response, allowed_mentions=NO_MENTIONS)
-    
-    
+
+
     @commands.slash_command(
         name="set_alert_channel",
         description="Set a channel for invite alerts",
@@ -196,19 +197,19 @@ class Utility(commands.Cog):
         locales = await select_value(cursor, 'locales')
         command_texts = TRANSLATIONS['commands']['set_alert_channel']['texts']
         locale = locales.get(str(ctx.author.id), 'pl')
-    
+
         if not channel:
             channel = ctx.channel
             return
-    
+
         await update_value(cursor, 'alert_channel', channel.id)
         await conn.commit()
         await cursor.close()
         await conn.close()
         response = command_texts['response'][locale] % channel.mention
         await ctx.respond(response)
-    
-    
+
+
     @commands.slash_command(
         name="create_channel",
         description="Create a channel",
@@ -246,10 +247,10 @@ class Utility(commands.Cog):
             name=name,
             overwrites={ctx.guild.default_role: no_view_permission}
         )
-        
+
         await ctx.respond(command_texts['response'][locale] % channel.mention)
-    
-    
+
+
     @commands.slash_command(
         name="language",
         description="Set your language for this bot",
@@ -283,24 +284,24 @@ class Utility(commands.Cog):
         locales = await select_value(cursor, 'locales')
         command_texts = TRANSLATIONS['commands']['language']['texts']
         locale = locales.get(str(ctx.author.id), 'pl')
-    
+
         if not language:
             response = command_texts['current_language'][locale]
             await ctx.respond(response)
             return
-    
+
         locale = language
         locales[str(ctx.author.id)] = language
-        
+
         await update_value(cursor, 'locales', locales)
         await conn.commit()
         await cursor.close()
         await conn.close()
-    
+
         response = command_texts['change_success'][locale]
         await ctx.respond(response)
-    
-    
+
+
     @commands.command(
         name="debug",
         brief="Print database to console (bot owner only)",
@@ -320,14 +321,14 @@ class Utility(commands.Cog):
             await cursor.close()
             await conn.close()
             return
-        
+
         record = await select_value(cursor, value)
         await cursor.close()
         await conn.close()
         print(record)
         print(type(record))
-    
-    
+
+
     @commands.command(
         name="fix",
         brief="Fix a database (bot owner only)",
@@ -363,11 +364,12 @@ class Utility(commands.Cog):
         await conn.commit()
         await cursor.close()
         await conn.close()
-    
+
     print(f"** SUCCESSFULLY LOADED {__name__} **")
+
 
 # =========SETUP========== #
 
 def setup(bot):
-	"""Every cog needs a setup function like this."""
-	bot.add_cog(Utility(bot))
+    """Every cog needs a setup function like this."""
+    bot.add_cog(Utility(bot))

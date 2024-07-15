@@ -1,3 +1,5 @@
+from my_utils import Paginator, get_placement_sign, get_placements_embed, get_lvl, NO_MENTIONS, TRANSLATIONS
+
 from sys import exc_info
 from asyncio import Lock
 import discord
@@ -9,7 +11,6 @@ from handle_database import select_value, update_value
 
 lock = Lock()
 
-from my_utils import Paginator, get_placement_sign, get_placements_embed, get_lvl, NO_MENTIONS, TRANSLATIONS
 
 # =========FUNCTIONS========== #
 
@@ -19,7 +20,7 @@ async def check_lvl_role_validity(ctx, user, new_lvl, cursor):
     if lvl_role not in user.roles:
         try:
             await ctx.defer()
-        except:
+        except Exception:
             pass
         print(f"Invalid role for user \"{user.name}\" in guild \"{ctx.guild.name}\"!")
         all_user_roles_ids = [role.id for role in user.roles]
@@ -76,6 +77,7 @@ async def update_user_lvl_roles(ctx, bot, user, old_xp, new_xp, cursor):
         await user.add_roles(new_lvl_role)
         print(f"Added role \"{new_lvl_role.name}\" to user \"{user.name}\" in guild \"{ctx.guild.name}\"")
 
+
 # =========CLASSES========== #
 
 class Xp(discord.Cog):
@@ -103,11 +105,11 @@ class Xp(discord.Cog):
             print(interaction.data)
         try:
             interaction.respond(exc)
-        except:
+        except Exception:
             try:
                 user = await self.bot.fetch_user(336475402535174154)
                 await user.send(exc)
-            except:
+            except Exception:
                 pass
 
         with open("../errors.txt", 'a') as f:
@@ -116,9 +118,9 @@ class Xp(discord.Cog):
 
 
     async def cog_command_error(
-        self, 
-        ctx: commands.Context, 
-        error: commands.CommandError
+        self,
+        ctx: commands.Context,
+        error: commands.CommandError,
     ):
         if isinstance(error, commands.MissingPermissions):
             conn = await aiosqlite.connect('mechbot.db')
@@ -440,7 +442,6 @@ class Xp(discord.Cog):
 
         if xp_amount == -1:
             del xp_category_settings[str(category.id)]
-            db['xp_category_settings'] = xp_category_settings
             await update_value(cursor, 'xp_category_settings', xp_category_settings)
             await conn.commit()
             await cursor.close()
@@ -611,7 +612,7 @@ class Xp(discord.Cog):
         xp = await select_value(cursor, 'xp')
         await cursor.close()
         await conn.close()
-        
+
         leaderboard = {
             k: float(v) for k, v in sorted(
                 xp.items(),
@@ -622,6 +623,7 @@ class Xp(discord.Cog):
 
         embed = await get_placements_embed(self.bot, ctx, 'xp', leaderboard, page)
         await ctx.respond(embed=embed, view=Paginator(ctx, 'xp', page, leaderboard))
+
 
 # =========SETUP========== #
 

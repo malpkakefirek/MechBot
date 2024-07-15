@@ -1,6 +1,7 @@
 import os
-import sqlite3
+# import sqlite3
 import json
+
 
 def initialize_database(conn):
     database_structure = {
@@ -48,11 +49,10 @@ def initialize_database(conn):
     except Exception as e:
         print(str(e))
 
-
     for key, value in database_structure.items():
         cursor.execute("SELECT * FROM mechy WHERE key = ?", (key, ))
         if cursor.fetchone() is None:
-            query = f"INSERT INTO mechy (key, value) VALUES (?, ?)"
+            query = "INSERT INTO mechy (key, value) VALUES (?, ?)"
             cursor.execute(query, (key, type_translation[value]))
             conn.commit()
 

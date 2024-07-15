@@ -279,6 +279,5 @@ class Help(discord.Cog):
         await send_embed(ctx, emb, locale)
 
 
-
 def setup(bot):
     bot.add_cog(Help(bot))

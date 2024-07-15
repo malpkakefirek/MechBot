@@ -5,7 +5,7 @@ import sqlite3
 import aiosqlite
 from dotenv import load_dotenv
 
-from keep_alive import keep_alive
+# from keep_alive import keep_alive
 from initialize_database import initialize_database
 from handle_database import select_value, update_value, select_value_sync, update_value_sync
 from cogs.xp_system import update_user_lvl_roles
@@ -55,7 +55,7 @@ cursor.close()
 # ========== LOADING COGS =========== #
 
 
-if __name__=='__main__':
+if __name__ == '__main__':
     print("loading plugins...")
     """
     Loads the cogs from the `./cogs` folder.
@@ -95,6 +95,7 @@ async def on_ready():
 
 # ========== FUNCTIONS =========== #
 
+
 # fetch invite by invite's code
 def find_invite_by_code(invite_list, code):
     for invite in invite_list:
@@ -103,6 +104,7 @@ def find_invite_by_code(invite_list, code):
     else:
         return None
 
+
 # ========== ON JOIN =========== #
 
 @bot.event
@@ -110,7 +112,7 @@ async def on_member_join(member):
     if member == bot.user:
         print(f"I joined the server {member.guild.name}!")
         return
-    
+
     conn = await aiosqlite.connect('mechbot.db')
     cursor = await conn.cursor()
     await cursor.execute("BEGIN TRANSACTION")
@@ -157,7 +159,7 @@ async def on_member_join(member):
         await conn.commit()
         await cursor.close()
         return
-    
+
     # find the used invite
     for inv_old in invites_before_join:
         inv = find_invite_by_code(invites_after_join, inv_old.code)
@@ -194,8 +196,8 @@ async def on_member_join(member):
         print(f"Added 50 money to user {inv.inviter.name} for inviting {member.name} (now at {money[str(inv.inviter.id)]})")
         # (disabled)
         # await malpka.create_dm()
-        # await malpka.dm_channel.send(f"`{inv.inviter.name}` earned 50 money for inviting `{member.name}`")  
-        await member.guild.get_channel(alert_channel_id).send(f"Użytkownik `{inv.inviter.name}` otrzymał 50 mech coinów za zaproszenie {member.mention} (teraz {money[str(inv.inviter.id)]}) [`{inv.code}`]") 
+        # await malpka.dm_channel.send(f"`{inv.inviter.name}` earned 50 money for inviting `{member.name}`")
+        await member.guild.get_channel(alert_channel_id).send(f"Użytkownik `{inv.inviter.name}` otrzymał 50 mech coinów za zaproszenie {member.mention} (teraz {money[str(inv.inviter.id)]}) [`{inv.code}`]")
         return
     else:
         for inv in invites_after_join:
@@ -219,7 +221,7 @@ async def on_member_join(member):
                 return
 
             # add money
-            if str(inv.inviter.id) in money:  
+            if str(inv.inviter.id) in money:
                 money[str(inv.inviter.id)] += 50
             else:
                 money[str(inv.inviter.id)] = 50
@@ -257,7 +259,7 @@ async def on_member_remove(member):
     if member == bot.user:
         print(f"I left the server {member.guild.name}!")
         return
-    
+
     conn = await aiosqlite.connect('mechbot.db')
     cursor = await conn.cursor()
     await cursor.execute("BEGIN TRANSACTION")
@@ -273,11 +275,19 @@ async def on_member_remove(member):
         money[str(inviter_id)] -= 50
         await update_value(cursor, 'money', money)
 
-        print(f"REMOVED 50 MONEY FROM {bot.get_user(inviter_id).name} (now {money[str(inviter_id)]})")
+        inviter = bot.get_user(inviter_id)
+        if not inviter:
+            inviter = bot.fetch_user(inviter_id)
+        if inviter:
+            inviter_name = inviter.name
+        else:
+            inviter_name = inviter_id
+
+        print(f"REMOVED 50 MONEY FROM {inviter_name} (now {money[str(inviter_id)]})")
         # disabled
         # await malpka.create_dm()
         # await malpka.dm_channel.send(f"Removed 50 money from `{member.guild.get_member(int(inviter_id)).name}`, because `{member.name}` left")
-        await member.guild.get_channel(alert_channel_id).send(f"Usunięto 50 mech coinów użytkownikowi `{bot.get_user(inviter_id).name}` (teraz {money[str(inviter_id)]}), ponieważ użytkownik `{member.name}` wyszedł z serwera :pensive:")
+        await member.guild.get_channel(alert_channel_id).send(f"Usunięto 50 mech coinów użytkownikowi `{inviter_name}` (teraz {money[str(inviter_id)]}), ponieważ użytkownik `{member.name}` wyszedł z serwera :pensive:")
     elif member.bot:
         print(f"{member.name} left the server, but was a bot")
         await member.guild.get_channel(alert_channel_id).send(f"Nie usunięto mech coinów, ponieważ użytkownik `{member.name}` jest botem.")
@@ -293,7 +303,8 @@ async def on_member_remove(member):
 async def on_presence_update(before, after):
     if after.id == 789090415932080138 and after.status == discord.Status.offline and before.status != discord.Status.offline:
         await bot.get_user(336475402535174154).send("Małpka bot is offline!")
-        
+
+
 # ========== ON MESSAGE =========== #
 
 @bot.event
@@ -370,8 +381,8 @@ async def on_message(message):
         await conn.commit()
         await cursor.close()
 
-
     await bot.process_commands(message)
+
 
 # ========== TEXT COMMANDS =========== #
 

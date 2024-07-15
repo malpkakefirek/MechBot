@@ -1,3 +1,5 @@
+from my_utils import CURRENCY_NAME, NO_MENTIONS, TRANSLATIONS
+
 import tracemalloc
 from sys import exc_info
 import discord
@@ -5,14 +7,13 @@ from discord.ext import commands
 from discord.commands import SlashCommandGroup
 # from discord.errors import Forbidden
 import aiosqlite
-from handle_database import select_value, update_value, select_value_sync
+from handle_database import select_value, update_value  # , select_value_sync
 import json
 # from math import ceil
 # import time
 
 tracemalloc.start()
 
-from my_utils import CURRENCY_NAME, NO_MENTIONS, TRANSLATIONS
 
 # =========FUNCTIONS========== #
 
@@ -25,13 +26,17 @@ async def get_shop_autocomplete(ctx: discord.AutocompleteContext):
     await conn.close()
     return shop
 
+
 def get_shop_list():
     import sqlite3
     conn_temp = sqlite3.connect('mechbot.db')
     cursor = conn_temp.cursor()
     cursor.execute("SELECT value FROM mechy WHERE key = 'shop'")
     return json.loads(cursor.fetchone()[0])
+
+
 shop_choices = get_shop_list()
+
 
 # =========CLASSES========== #
 
@@ -158,7 +163,7 @@ class Shop(discord.Cog):
         item_details = shop[item]
         if str(ctx.author.id) not in money or money[str(ctx.author.id)] < item_details['price']:
             response = errors['insufficient_funds'][locale]
-            await ctx.respond(response) # TODO possibly add info about missing money
+            await ctx.respond(response)     # TODO possibly add info about missing money
             return
 
         if item_details['role_id']:
@@ -266,20 +271,20 @@ class Shop(discord.Cog):
             description_localizations=TRANSLATIONS['commands']['shop modify']['options']['action'],
             choices=[
                 discord.OptionChoice(
-					name="Add",
-					value="Add",
-					name_localizations=TRANSLATIONS['commands']['shop modify']['options']['add'],
-				),
-				discord.OptionChoice(
-					name="Edit",
-					value="Edit",
-					name_localizations=TRANSLATIONS['commands']['shop modify']['options']['edit'],
-				),
-				discord.OptionChoice(
-					name="Remove",
-					value="Remove",
-					name_localizations=TRANSLATIONS['commands']['shop modify']['options']['remove'],
-				)
+                    name="Add",
+                    value="Add",
+                    name_localizations=TRANSLATIONS['commands']['shop modify']['options']['add'],
+                ),
+                discord.OptionChoice(
+                    name="Edit",
+                    value="Edit",
+                    name_localizations=TRANSLATIONS['commands']['shop modify']['options']['edit'],
+                ),
+                discord.OptionChoice(
+                    name="Remove",
+                    value="Remove",
+                    name_localizations=TRANSLATIONS['commands']['shop modify']['options']['remove'],
+                )
             ],
         ),
         item_name: discord.Option(
@@ -311,17 +316,17 @@ class Shop(discord.Cog):
             description="Can this item be returned? (Yes by default)",
             description_localizations=TRANSLATIONS['commands']['shop modify']['options']['returnable'],
             choices=[
-				discord.OptionChoice(
-					name="Yes",
-					value=1,
-					name_localizations=TRANSLATIONS['commands']['shop modify']['options']['yes'],
-				),
-				discord.OptionChoice(
-					name="No",
-					value=0,
-					name_localizations=TRANSLATIONS['commands']['shop modify']['options']['no'],
-				)
-			],
+                discord.OptionChoice(
+                    name="Yes",
+                    value=1,
+                    name_localizations=TRANSLATIONS['commands']['shop modify']['options']['yes'],
+                ),
+                discord.OptionChoice(
+                    name="No",
+                    value=0,
+                    name_localizations=TRANSLATIONS['commands']['shop modify']['options']['no'],
+                )
+            ],
             default=-1,
         ),
         remove_role: discord.Option(
@@ -329,17 +334,17 @@ class Shop(discord.Cog):
             description="Do you want to remove the role from this item? (edit mode only | No by default)",
             description_localizations=TRANSLATIONS['commands']['shop modify']['options']['remove_role'],
             choices=[
-				discord.OptionChoice(
-					name="Yes",
-					value=1,
-					name_localizations=TRANSLATIONS['commands']['shop modify']['options']['yes'],
-				),
-				discord.OptionChoice(
-					name="No",
-					value=0,
-					name_localizations=TRANSLATIONS['commands']['shop modify']['options']['no'],
-				)
-			],
+                discord.OptionChoice(
+                    name="Yes",
+                    value=1,
+                    name_localizations=TRANSLATIONS['commands']['shop modify']['options']['yes'],
+                ),
+                discord.OptionChoice(
+                    name="No",
+                    value=0,
+                    name_localizations=TRANSLATIONS['commands']['shop modify']['options']['no'],
+                )
+            ],
             default=0,
         ),
     ):
@@ -487,6 +492,7 @@ class Shop(discord.Cog):
         await conn.close()
         await ctx.respond("?????")
         return
+
 
 # =========SETUP========== #
 

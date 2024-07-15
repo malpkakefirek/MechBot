@@ -1,3 +1,5 @@
+from my_utils import Paginator, get_placements_embed, get_placement_sign, CURRENCY_NAME, NO_MENTIONS, TRANSLATIONS
+
 import tracemalloc
 from sys import exc_info
 import discord
@@ -11,11 +13,10 @@ from handle_database import select_value, update_value
 
 tracemalloc.start()
 
-from my_utils import Paginator, get_placements_embed, get_placement_sign, CURRENCY_NAME, NO_MENTIONS, TRANSLATIONS
-
 # =========STATIC VARIABLES========== #
 
 # =========FUNCTIONS========== #
+
 
 # =========CLASSES========== #
 
@@ -44,11 +45,11 @@ class Money(discord.Cog):
             print(interaction.data)
         try:
             interaction.respond(exc)
-        except:
+        except Exception:
             try:
                 user = await self.bot.fetch_user(336475402535174154)
                 await user.send(exc)
-            except:
+            except Exception:
                 pass
 
         with open("../errors.txt", 'a') as _f:
@@ -271,7 +272,7 @@ class Money(discord.Cog):
         old_sender_balance = int(money[str(sender.id)])
         if old_sender_balance < money_amount:
             response = TRANSLATIONS['errors']['insufficient_funds'][locale]
-            await ctx.respond(response) # TODO possibly add info about missing balance
+            await ctx.respond(response)     # TODO possibly add info about missing balance
             return
 
         if str(receiver.id) not in money:
@@ -329,6 +330,7 @@ class Money(discord.Cog):
 
         embed = await get_placements_embed(self.bot, ctx, 'money', leaderboard, page)
         await ctx.respond(embed=embed, view=Paginator(ctx, 'money', page, leaderboard))
+
 
 # =========SETUP========== #
 
