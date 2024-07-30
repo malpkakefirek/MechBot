@@ -9,8 +9,8 @@
             "en": "%s is higher than my highest role (%s)!"
         },
         "insufficient_funds": {
-            "pl": "Nie masz wystarczających środków! (show missing money?)",
-            "en": "You have insufficient funds! (show missing money?)"
+            "pl": "Nie masz wystarczających środków! Brakuje ci %s%s",
+            "en": "You have insufficient funds! You're missing %s%s"
         },
         "role_present": {
             "pl": "Już masz tą rolę!",

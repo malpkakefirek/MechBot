@@ -162,8 +162,8 @@ class Shop(discord.Cog):
         item = item.lower()
         item_details = shop[item]
         if str(ctx.author.id) not in money or money[str(ctx.author.id)] < item_details['price']:
-            response = errors['insufficient_funds'][locale]
-            await ctx.respond(response)     # TODO possibly add info about missing money
+            response = errors['insufficient_funds'][locale] % (item_details['price'] - money[str(ctx.author.id)], CURRENCY_NAME)
+            await ctx.respond(response)
             return
 
         if item_details['role_id']:
