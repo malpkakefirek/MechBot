@@ -32,22 +32,23 @@ def initialize_database(conn):
         )
     ''')
 
-    try:
-        # Read JSON data from file
-        with open('db.json', 'r') as json_file:
-            data = json.load(json_file)
+    if os.path.exists('db.json'):
+        try:
+            # Read JSON data from file
+            with open('db.json', 'r') as json_file:
+                data = json.load(json_file)
 
-        # Insert data into SQLite table
-        for key, value in data.items():
-            json_string = json.dumps(value)
-            cursor.execute("INSERT INTO mechy (key, value) VALUES (?, ?)", (key, json_string))
+            # Insert data into SQLite table
+            for key, value in data.items():
+                json_string = json.dumps(value)
+                cursor.execute("INSERT INTO mechy (key, value) VALUES (?, ?)", (key, json_string))
 
-        # Commit the changes
-        conn.commit()
+            # Commit the changes
+            conn.commit()
 
-        os.remove('db.json')
-    except Exception as e:
-        print(str(e))
+            os.remove('db.json')
+        except Exception as e:
+            print(str(e))
 
     for key, value in database_structure.items():
         cursor.execute("SELECT * FROM mechy WHERE key = ?", (key, ))
