@@ -411,20 +411,20 @@
                     "en": "`No role`"
                 },
                 "price_change": {
-                    "pl": "\nCena: `%s` -> `%s`",
-                    "en": "\nPrice: `%s` -> `%s`"
+                    "pl": "\nCena: `%s` → `%s`",
+                    "en": "\nPrice: `%s` → `%s`"
                 },
                 "role_change": {
-                    "pl": "\nRola: %s -> %s",
-                    "en": "\nRole: %s -> %s"
+                    "pl": "\nRola: %s → %s",
+                    "en": "\nRole: %s → %s"
                 },
                 "description_change": {
-                    "pl": "\nOpis: `%s` -> `%s`",
-                    "en": "\nDescription: `%s` -> `%s`"
+                    "pl": "\nOpis:```md\n%s```↓```md\n%s```",
+                    "en": "\nDescription:```md\n%s```↓```md\n%s```"
                 },
                 "returnable_change": {
-                    "pl": "\nBezzwrotność: `%s` -> `%s`",
-                    "en": "\nReturnable: `%s` -> `%s`"
+                    "pl": "\nBezzwrotność: `%s` → `%s`",
+                    "en": "\nReturnable: `%s` → `%s`"
                 },
                 "edit_success": {
                     "pl": "Pomyślnie edytowano '%s'. Zmiany:%s",
