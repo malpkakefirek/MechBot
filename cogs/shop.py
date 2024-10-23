@@ -123,7 +123,7 @@ class Shop(discord.Cog):
                 non_returnable = ""
             else:
                 non_returnable = command_texts['non-returnable'][locale]
-            text += f"**{item_name}** {non_returnable}- {price} {CURRENCY_NAME}\n {description}\n\n"
+            text += f"**{item_name}** {non_returnable}- {price}{CURRENCY_NAME}\n {description}\n\n"
         embed = discord.Embed(
             title=command_texts['title'][locale],
             color=discord.Color.gold(),
