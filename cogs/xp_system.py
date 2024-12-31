@@ -624,6 +624,25 @@ class Xp(discord.Cog):
         embed = await get_placements_embed(self.bot, ctx, 'xp', leaderboard, page)
         await ctx.respond(embed=embed, view=Paginator(ctx, 'xp', page, leaderboard))
 
+    @xp_system.command(
+        name="summary",
+        description="Shows a summary of all XP",
+        description_localizations=TRANSLATIONS['commands']['xp summary']['description'],
+    )
+    @commands.has_permissions(administrator=True)
+    async def xp_summary(
+        self,
+        ctx,
+    ):
+        conn = await aiosqlite.connect('mechbot.db')
+        cursor = await conn.cursor()
+        xp = await select_value(cursor, 'xp')
+        await cursor.close()
+        await conn.close()
+
+        summary = round(sum(float(v) for v in xp.values()), 2)
+        await ctx.respond(f"Summary of all XP: {summary}")
+
 
 # =========SETUP========== #
 

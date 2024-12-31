@@ -588,6 +588,12 @@
                     "pl": "Strona którą chcesz zobaczyć (1 defaultowo)"
                 }
             }
+        },
+        "xp summary": {
+            "name": "",
+            "description": {
+                "pl": "Pokazuje sumę XP"
+            }
         }
     },
     "groups": {
