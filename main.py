@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from initialize_database import initialize_database
 from handle_database import select_value, update_value, select_value_sync, update_value_sync
 from cogs.xp_system import update_user_lvl_roles
+from my_utils import update_translations
 
 # import tracemalloc
 # tracemalloc.start()
@@ -348,6 +349,7 @@ async def on_message(message):
 @commands.is_owner()
 async def reload_cogs(ctx):
     print("reloading...")
+    update_translations()
     for cog in os.listdir('./cogs'):
         if cog.endswith('.py') is True:
             bot.reload_extension(f'cogs.{cog[:-3]}')

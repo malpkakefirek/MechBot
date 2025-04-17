@@ -6,8 +6,14 @@ import json
 import discord
 import aiosqlite
 
-with open('translations.json', 'r') as file:
-    TRANSLATIONS = json.load(file)
+
+def update_translations():
+    global TRANSLATIONS
+    with open('translations.json', 'r') as file:
+        TRANSLATIONS = json.load(file)
+
+
+update_translations()
 
 CURRENCY_NAME = " mech coins"
 NO_MENTIONS = discord.AllowedMentions().none()
