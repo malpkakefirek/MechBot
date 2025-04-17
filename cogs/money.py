@@ -58,11 +58,9 @@ class Money(discord.Cog):
 
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        await cursor.close()
-        await conn.close()
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
         errors = TRANSLATIONS['errors']
         locale = locales.get(str(ctx.author.id), 'pl')
 
@@ -90,19 +88,17 @@ class Money(discord.Cog):
             default=None,
         ),
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        command_texts = TRANSLATIONS['commands']['money show']['texts']
-        locale = locales.get(str(ctx.author.id), 'pl')
-        description = command_texts['response'][locale]
-        if user is None:
-            user = ctx.author
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
+                command_texts = TRANSLATIONS['commands']['money show']['texts']
+                locale = locales.get(str(ctx.author.id), 'pl')
+                description = command_texts['response'][locale]
+                if user is None:
+                    user = ctx.author
 
-        avatar_url = user.avatar.url
-        money = await select_value(cursor, 'money')
-        await cursor.close()
-        await conn.close()
+                avatar_url = user.avatar.url
+                money = await select_value(cursor, 'money')
         leaderboard_placement = await get_placement_sign(user.id, 'money')
         # If user has any money
         if str(user.id) in money:
@@ -155,27 +151,20 @@ class Money(discord.Cog):
             default=None,
         ),
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        command_texts = TRANSLATIONS['commands']['money add']['texts']
-        locale = locales.get(str(ctx.author.id), 'pl')
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
+            command_texts = TRANSLATIONS['commands']['money add']['texts']
+            locale = locales.get(str(ctx.author.id), 'pl')
 
-        if user is None:
-            user = ctx.author
+            if user is None:
+                user = ctx.author
 
-        await cursor.execute("BEGIN TRANSACTION")
-        money = await select_value(cursor, 'money')
-        # If user has any money
-        if str(user.id) in money:
-            money[str(user.id)] = int(money[str(user.id)]) + money_amount
-        # If user has no money
-        else:
-            money[str(user.id)] = money_amount
-        await update_value(cursor, 'money', money)
-        await conn.commit()
-        await cursor.close()
-        await conn.close()
+            async with conn.execute("BEGIN TRANSACTION") as cursor:
+                money = await select_value(cursor, 'money')
+                money[str(user.id)] = money.get(str(user.id), 0) + money_amount
+                await update_value(cursor, 'money', money)
+                await conn.commit()
 
         balance = money[str(user.id)]
         response = command_texts['response'][locale]
@@ -206,27 +195,20 @@ class Money(discord.Cog):
             default=None,
         ),
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        command_texts = TRANSLATIONS['commands']['money remove']['texts']
-        locale = locales.get(str(ctx.author.id), 'pl')
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
+            command_texts = TRANSLATIONS['commands']['money remove']['texts']
+            locale = locales.get(str(ctx.author.id), 'pl')
 
-        if user is None:
-            user = ctx.author
+            if user is None:
+                user = ctx.author
 
-        await cursor.execute("BEGIN TRANSACTION")
-        money = await select_value(cursor, 'money')
-        # If user has any money
-        if str(user.id) in money:
-            money[str(user.id)] = int(money[str(user.id)]) - money_amount
-        # If user has no money
-        else:
-            money[str(user.id)] = -money_amount
-        await update_value(cursor, 'money', money)
-        await conn.commit()
-        await cursor.close()
-        await conn.close()
+            async with conn.execute("BEGIN TRANSACTION") as cursor:
+                money = await select_value(cursor, 'money')
+                money[str(user.id)] = money.get(str(user.id), 0) - money_amount
+                await update_value(cursor, 'money', money)
+                await conn.commit()
 
         balance = money[str(user.id)]
         response = command_texts['response'][locale]
@@ -256,35 +238,26 @@ class Money(discord.Cog):
             required=True,
         ),
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        command_texts = TRANSLATIONS['commands']['money pay']['texts']
-        locale = locales.get(str(ctx.author.id), 'pl')
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
+            command_texts = TRANSLATIONS['commands']['money pay']['texts']
+            locale = locales.get(str(ctx.author.id), 'pl')
 
-        await cursor.execute("BEGIN TRANSACTION")
-        money = await select_value(cursor, 'money')
-        sender = ctx.author
-        # If user has any money
-        if str(sender.id) not in money:
-            money[str(sender.id)] = 0
+            sender = ctx.author
+            async with conn.execute("BEGIN TRANSACTION") as cursor:
+                money = await select_value(cursor, 'money')
+                sender_balance = int(money.get(str(sender.id), 0))
+                if sender_balance < money_amount:
+                    response = TRANSLATIONS['errors']['insufficient_funds'][locale]
+                    await ctx.respond(response)     # TODO possibly add info about missing balance
+                    return
 
-        old_sender_balance = int(money[str(sender.id)])
-        if old_sender_balance < money_amount:
-            response = TRANSLATIONS['errors']['insufficient_funds'][locale]
-            await ctx.respond(response)     # TODO possibly add info about missing balance
-            return
+                money[str(sender.id)] = sender_balance - money_amount
+                money[str(receiver.id)] = int(money.get(str(receiver.id), 0)) + money_amount
 
-        if str(receiver.id) not in money:
-            money[str(receiver.id)] = 0
-
-        money[str(sender.id)] = int(money[str(sender.id)]) - money_amount
-        money[str(receiver.id)] = int(money[str(receiver.id)]) + money_amount
-
-        await update_value(cursor, 'money', money)
-        await conn.commit()
-        await cursor.close()
-        await conn.close()
+                await update_value(cursor, 'money', money)
+                await conn.commit()
 
         sender_balance = money[str(sender.id)]
         response = command_texts['response'][locale]
@@ -314,11 +287,9 @@ class Money(discord.Cog):
             default=1,
         ),
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        money = await select_value(cursor, 'money')
-        await cursor.close()
-        await conn.close()
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                money = await select_value(cursor, 'money')
 
         leaderboard = {
             k: int(v) for k, v in sorted(

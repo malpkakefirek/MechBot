@@ -26,11 +26,9 @@ class Utility(commands.Cog):
     # =========EVENTS========== #
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        await cursor.close()
-        await conn.close()
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
         errors = TRANSLATIONS['errors']
         locale = locales.get(str(ctx.author.id), 'pl')
 
@@ -49,11 +47,9 @@ class Utility(commands.Cog):
         description_localizations=TRANSLATIONS['commands']['funfact']['description'],
     )
     async def fun_fact(self, ctx):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        await cursor.close()
-        await conn.close()
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
         command_texts = TRANSLATIONS['commands']['funfact']['texts']
         locale = locales.get(str(ctx.author.id), 'pl')
 
@@ -68,20 +64,17 @@ class Utility(commands.Cog):
     )
     @commands.has_permissions(administrator=True)
     async def delete_lvl_roles(self, ctx):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        command_texts = TRANSLATIONS['commands']['delete_lvl_roles']['texts']
-        locale = locales.get(str(ctx.author.id), 'pl')
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.execute("BEGIN TRANSACTION") as cursor:
+                locales = await select_value(cursor, 'locales')
+                command_texts = TRANSLATIONS['commands']['delete_lvl_roles']['texts']
+                locale = locales.get(str(ctx.author.id), 'pl')
 
-        await cursor.execute("BEGIN TRANSACTION")
-        lvl_roles = await select_value(cursor, 'lvl_roles')     # TODO delete roles from this list
-        for role in [role for role in ctx.guild.roles if role.name.endswith(" LVL]")]:
-            await role.delete()
-        await update_value(cursor, 'lvl_roles', dict())
-        await conn.commit()
-        await cursor.close()
-        await conn.close()
+                lvl_roles = await select_value(cursor, 'lvl_roles')     # TODO delete roles from this list
+                for role in [role for role in ctx.guild.roles if role.name.endswith(" LVL]")]:
+                    await role.delete()
+                await update_value(cursor, 'lvl_roles', dict())
+                await conn.commit()
         await ctx.respond(command_texts['response'][locale])
 
 
@@ -125,11 +118,9 @@ class Utility(commands.Cog):
             default=0,
         ),
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        await cursor.close()
-        await conn.close()
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
         command_texts = TRANSLATIONS['commands']['give_everyone_role']['texts']
         errors = TRANSLATIONS['errors']
         locale = locales.get(str(ctx.author.id), 'pl')
@@ -192,20 +183,18 @@ class Utility(commands.Cog):
             default=None,
         )
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        command_texts = TRANSLATIONS['commands']['set_alert_channel']['texts']
-        locale = locales.get(str(ctx.author.id), 'pl')
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
+                command_texts = TRANSLATIONS['commands']['set_alert_channel']['texts']
+                locale = locales.get(str(ctx.author.id), 'pl')
 
-        if not channel:
-            channel = ctx.channel
-            return
+                if not channel:
+                    channel = ctx.channel
+                    return
 
-        await update_value(cursor, 'alert_channel', channel.id)
-        await conn.commit()
-        await cursor.close()
-        await conn.close()
+                await update_value(cursor, 'alert_channel', channel.id)
+                await conn.commit()
         response = command_texts['response'][locale] % channel.mention
         await ctx.respond(response)
 
@@ -232,11 +221,9 @@ class Utility(commands.Cog):
             default=discord.TextChannel,
         )
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        await cursor.close()
-        await conn.close()
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
         command_texts = TRANSLATIONS['commands']['create_channel']['texts']
         locale = locales.get(str(ctx.author.id), 'pl')
 
@@ -278,25 +265,22 @@ class Utility(commands.Cog):
             default=None,
         )
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        await cursor.execute("BEGIN TRANSACTION")
-        locales = await select_value(cursor, 'locales')
-        command_texts = TRANSLATIONS['commands']['language']['texts']
-        locale = locales.get(str(ctx.author.id), 'pl')
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.execute("BEGIN TRANSACTION") as cursor:
+                locales = await select_value(cursor, 'locales')
+                command_texts = TRANSLATIONS['commands']['language']['texts']
+                locale = locales.get(str(ctx.author.id), 'pl')
 
-        if not language:
-            response = command_texts['current_language'][locale]
-            await ctx.respond(response)
-            return
+                if not language:
+                    response = command_texts['current_language'][locale]
+                    await ctx.respond(response)
+                    return
 
-        locale = language
-        locales[str(ctx.author.id)] = language
+                locale = language
+                locales[str(ctx.author.id)] = language
 
-        await update_value(cursor, 'locales', locales)
-        await conn.commit()
-        await cursor.close()
-        await conn.close()
+                await update_value(cursor, 'locales', locales)
+                await conn.commit()
 
         response = command_texts['change_success'][locale]
         await ctx.respond(response)
@@ -310,23 +294,21 @@ class Utility(commands.Cog):
     )
     @commands.is_owner()
     async def debug(self, ctx, *, value):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        if value == "all":
-            await cursor.execute("SELECT key FROM mechy")
-            keys = [row[0] for row in await cursor.fetchall()]
-            for key in keys:
-                print(key)
-                print(f"{key} ——— {await select_value(cursor, key)}")
-            await cursor.close()
-            await conn.close()
-            return
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                if value == "all":
+                    await cursor.execute("SELECT key FROM mechy")
+                    keys = [row[0] for row in await cursor.fetchall()]
+                    for key in keys:
+                        print(key)
+                        print(f"{key} ——— {await select_value(cursor, key)}")
+                    await cursor.close()
+                    await conn.close()
+                    return
 
-        record = await select_value(cursor, value)
-        await cursor.close()
-        await conn.close()
-        print(record)
-        print(type(record))
+                record = await select_value(cursor, value)
+                print(record)
+                print(type(record))
 
 
     @commands.command(
@@ -337,33 +319,30 @@ class Utility(commands.Cog):
     )
     @commands.is_owner()
     async def fix(self, ctx, *, value):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        await cursor.execute("BEGIN TRANSACTION")
-        if value == "money":
-            money = await select_value(cursor, 'money')
-            for member_id in money:
-                if ctx.guild.get_member(member_id).bot:
-                    del money[member_id]
-                    continue
-                money[member_id] = int(float(money[member_id]))
-            await update_value(cursor, 'money', money)
-            await ctx.send("Fixed money db")
-        elif value == "xp":
-            xp = await select_value(cursor, 'xp')
-            for key, value in xp:
-                xp[key] = str(value)
-            await update_value(cursor, 'xp', xp)
-            await ctx.send("Fixed lvl_roles db")
-        elif value == "xp_hard":
-            await update_value(cursor, 'xp', dict())
-            await update_value(cursor, 'temp_xp', dict())
-            await ctx.send("Fixed lvl_roles db")
-        else:
-            await ctx.send("Couldn't fix the db, try doing it manually in the console")
-        await conn.commit()
-        await cursor.close()
-        await conn.close()
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.execute("BEGIN TRANSACTION") as cursor:
+                if value == "money":
+                    money = await select_value(cursor, 'money')
+                    for member_id in money:
+                        if ctx.guild.get_member(member_id).bot:
+                            del money[member_id]
+                            continue
+                        money[member_id] = int(float(money[member_id]))
+                    await update_value(cursor, 'money', money)
+                    await ctx.send("Fixed money db")
+                elif value == "xp":
+                    xp = await select_value(cursor, 'xp')
+                    for key, value in xp:
+                        xp[key] = str(value)
+                    await update_value(cursor, 'xp', xp)
+                    await ctx.send("Fixed lvl_roles db")
+                elif value == "xp_hard":
+                    await update_value(cursor, 'xp', dict())
+                    await update_value(cursor, 'temp_xp', dict())
+                    await ctx.send("Fixed lvl_roles db")
+                else:
+                    await ctx.send("Couldn't fix the db, try doing it manually in the console")
+                await conn.commit()
 
     print(f"** SUCCESSFULLY LOADED {__name__} **")
 

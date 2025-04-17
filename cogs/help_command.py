@@ -62,17 +62,17 @@ class Help(discord.Cog):
         secondary_prefix = "$"
         version = "beta 2.2"
 
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        commands = TRANSLATIONS['commands']
-        command_texts = commands['help']['texts']
-        locale = locales.get(str(ctx.author.id), 'pl')
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                cursor = await conn.cursor()
+                locales = await select_value(cursor, 'locales')
+                commands = TRANSLATIONS['commands']
+                command_texts = commands['help']['texts']
+                locale = locales.get(str(ctx.author.id), 'pl')
 
-        # setting owner name
-        owner_id = 336475402535174154
-        owner_ids = await select_value(cursor, 'permitted')
-        await cursor.close()
+                # setting owner name
+                owner_id = 336475402535174154
+                owner_ids = await select_value(cursor, 'permitted')
         try:
             owner_name = str(self.bot.get_user(owner_id))
         except Exception:

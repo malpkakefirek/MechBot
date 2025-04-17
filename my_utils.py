@@ -84,11 +84,9 @@ def get_lvl(xp: float):
 
 async def get_placement_sign(user_id: int, database_name):
     """Returns a placement display when provided with a user_id and database"""
-    conn = await aiosqlite.connect('mechbot.db')
-    cursor = await conn.cursor()
-    database = await select_value(cursor, database_name)
-    await cursor.close()
-    await conn.close()
+    async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+        async with conn.cursor() as cursor:
+            database = await select_value(cursor, database_name)
     placement_medals = {1: ":first_place:", 2: ":second_place:", 3: ":third_place:"}
 
     if str(user_id) not in database.keys():
@@ -110,11 +108,9 @@ async def get_placement_sign(user_id: int, database_name):
 
 async def get_placements_embed(bot, ctx, database: str, leaderboard: dict, page: int, lines_per_page=10):
     """Returns an embed with the placements"""
-    conn = await aiosqlite.connect('mechbot.db')
-    cursor = await conn.cursor()
-    locales = await select_value(cursor, 'locales')
-    await cursor.close()
-    await conn.close()
+    async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+        async with conn.cursor() as cursor:
+            locales = await select_value(cursor, 'locales')
     command_texts = TRANSLATIONS['get_placements_embed']
     locale = locales.get(str(ctx.author.id), 'pl')
 

@@ -19,11 +19,9 @@ tracemalloc.start()
 
 # db['shop'] = {'some item name': {'price': int, 'role_id': Optional[int], 'description': str, 'returnable': bool}, ...}
 async def get_shop_autocomplete(ctx: discord.AutocompleteContext):
-    conn = await aiosqlite.connect('mechbot.db')
-    cursor = await conn.cursor()
-    shop = await select_value(cursor, 'shop')
-    await cursor.close()
-    await conn.close()
+    async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+        async with conn.cursor() as cursor:
+            shop = await select_value(cursor, 'shop')
     return shop
 
 
@@ -32,7 +30,10 @@ def get_shop_list():
     conn_temp = sqlite3.connect('mechbot.db')
     cursor = conn_temp.cursor()
     cursor.execute("SELECT value FROM mechy WHERE key = 'shop'")
-    return json.loads(cursor.fetchone()[0])
+    val = json.loads(cursor.fetchone()[0])
+    cursor.close()
+    conn_temp.close()
+    return val
 
 
 shop_choices = get_shop_list()
@@ -78,11 +79,9 @@ class Shop(discord.Cog):
 
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        await cursor.close()
-        await conn.close()
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
         errors = TRANSLATIONS['errors']
         locale = locales.get(str(ctx.author.id), 'pl')
 
@@ -104,15 +103,13 @@ class Shop(discord.Cog):
         self,
         ctx,
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        command_texts = TRANSLATIONS['commands']['shop list']['texts']
-        locale = locales.get(str(ctx.author.id), 'pl')
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
+                command_texts = TRANSLATIONS['commands']['shop list']['texts']
+                locale = locales.get(str(ctx.author.id), 'pl')
 
-        shop = await select_value(cursor, 'shop')
-        await cursor.close()
-        await conn.close()
+                shop = await select_value(cursor, 'shop')
         text = ""
         for item_name in shop:
             price = shop[item_name]['price']
@@ -149,44 +146,42 @@ class Shop(discord.Cog):
         ctx: discord.ApplicationContext,
         item: str,
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        command_texts = TRANSLATIONS['commands']['shop buy']['texts']
-        errors = TRANSLATIONS['errors']
-        locale = locales.get(str(ctx.author.id), 'pl')
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
+            command_texts = TRANSLATIONS['commands']['shop buy']['texts']
+            errors = TRANSLATIONS['errors']
+            locale = locales.get(str(ctx.author.id), 'pl')
 
-        await cursor.execute("BEGIN TRANSACTION")
-        money = await select_value(cursor, 'money')
-        shop = await select_value(cursor, 'shop')
-        item = item.lower()
-        item_details = shop[item]
-        if str(ctx.author.id) not in money or money[str(ctx.author.id)] < item_details['price']:
-            response = errors['insufficient_funds'][locale] % (item_details['price'] - money[str(ctx.author.id)], CURRENCY_NAME)
-            await ctx.respond(response)
-            return
+            async with conn.execute("BEGIN TRANSACTION") as cursor:
+                money = await select_value(cursor, 'money')
+                shop = await select_value(cursor, 'shop')
+                item = item.lower()
+                item_details = shop[item]
+                if str(ctx.author.id) not in money or money[str(ctx.author.id)] < item_details['price']:
+                    response = errors['insufficient_funds'][locale] % (item_details['price'] - money[str(ctx.author.id)], CURRENCY_NAME)
+                    await ctx.respond(response)
+                    return
 
-        if item_details['role_id']:
-            role = ctx.guild.get_role(item_details['role_id'])
-            if role in ctx.author.roles:
-                response = errors['role_present'][locale]
-                await ctx.respond(response, ephemeral=True)
-                return
+                if item_details['role_id']:
+                    role = ctx.guild.get_role(item_details['role_id'])
+                    if role in ctx.author.roles:
+                        response = errors['role_present'][locale]
+                        await ctx.respond(response, ephemeral=True)
+                        return
 
-            try:
-                await ctx.author.add_roles(role)
-            except discord.Forbidden:
-                response = errors['role_hierarchy'][locale]
-                await ctx.respond(response)
-        else:
-            # TODO implement or remove this feature
-            await ctx.respond("This feature is not yet implemented!")
-            return
-        money[str(ctx.author.id)] -= item_details['price']
-        await update_value(cursor, 'money', money)
-        await conn.commit()
-        await cursor.close()
-        await conn.close()
+                    try:
+                        await ctx.author.add_roles(role)
+                    except discord.Forbidden:
+                        response = errors['role_hierarchy'][locale]
+                        await ctx.respond(response)
+                else:
+                    # TODO implement or remove this feature
+                    await ctx.respond("This feature is not yet implemented!")
+                    return
+                money[str(ctx.author.id)] -= item_details['price']
+                await update_value(cursor, 'money', money)
+                await conn.commit()
 
         response = command_texts['response'][locale]
         await ctx.respond(response % item)
@@ -209,42 +204,40 @@ class Shop(discord.Cog):
         ctx,
         item: str,
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        command_texts = TRANSLATIONS['commands']['shop return']['texts']
-        errors = TRANSLATIONS['errors']
-        locale = locales.get(str(ctx.author.id), 'pl')
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                locales = await select_value(cursor, 'locales')
+            command_texts = TRANSLATIONS['commands']['shop return']['texts']
+            errors = TRANSLATIONS['errors']
+            locale = locales.get(str(ctx.author.id), 'pl')
 
-        await cursor.execute("BEGIN TRANSACTION")
-        money = await select_value(cursor, 'money')
-        shop = await select_value(cursor, 'shop')
-        item = item.lower()
-        item_details = shop[item]
-        if str(ctx.author.id) not in money:
-            money[str(ctx.author.id)] = 0
+            async with conn.execute("BEGIN TRANSACTION") as cursor:
+                money = await select_value(cursor, 'money')
+                shop = await select_value(cursor, 'shop')
+                item = item.lower()
+                item_details = shop[item]
+                if str(ctx.author.id) not in money:
+                    money[str(ctx.author.id)] = 0
 
-        if item_details['role_id']:
-            role = ctx.guild.get_role(item_details['role_id'])
-            if role not in ctx.author.roles:
-                response = errors['role_absent'][locale]
-                await ctx.respond(response, ephemeral=True)
-                return
+                if item_details['role_id']:
+                    role = ctx.guild.get_role(item_details['role_id'])
+                    if role not in ctx.author.roles:
+                        response = errors['role_absent'][locale]
+                        await ctx.respond(response, ephemeral=True)
+                        return
 
-            try:
-                await ctx.author.remove_roles(role)
-            except discord.Forbidden:
-                response = errors['role_hierarchy'][locale]
-                await ctx.respond(response)
-        else:
-            # TODO implement or remove this feature
-            await ctx.respond("This feature is not yet implemented!")
-            return
-        money[str(ctx.author.id)] += item_details['price']
-        await update_value(cursor, 'money', money)
-        await conn.commit()
-        await cursor.close()
-        await conn.close()
+                    try:
+                        await ctx.author.remove_roles(role)
+                    except discord.Forbidden:
+                        response = errors['role_hierarchy'][locale]
+                        await ctx.respond(response)
+                else:
+                    # TODO implement or remove this feature
+                    await ctx.respond("This feature is not yet implemented!")
+                    return
+                money[str(ctx.author.id)] += item_details['price']
+                await update_value(cursor, 'money', money)
+                await conn.commit()
 
         response = command_texts['response'][locale]
         await ctx.respond(response % item)
@@ -348,148 +341,125 @@ class Shop(discord.Cog):
             default=0,
         ),
     ):
-        conn = await aiosqlite.connect('mechbot.db')
-        cursor = await conn.cursor()
-        locales = await select_value(cursor, 'locales')
-        command_texts = TRANSLATIONS['commands']['shop modify']['texts']
-        errors = TRANSLATIONS['errors']
-        locale = locales.get(str(ctx.author.id), 'pl')
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.execute("BEGIN TRANSACTION") as cursor:
+                locales = await select_value(cursor, 'locales')
+                command_texts = TRANSLATIONS['commands']['shop modify']['texts']
+                errors = TRANSLATIONS['errors']
+                locale = locales.get(str(ctx.author.id), 'pl')
 
-        await cursor.execute("BEGIN TRANSACTION")
-        shop = await select_value(cursor, 'shop')
-        item_name = item_name.lower()
+                shop = await select_value(cursor, 'shop')
+                item_name = item_name.lower()
 
-        if action == "Add":
-            if item_name in shop:
-                await conn.commit()
-                await cursor.close()
-                await conn.close()
+                if action == "Add":
+                    if item_name in shop:
+                        response = errors['item_already_exists'][locale]
+                        await ctx.respond(response % item_name, ephemeral=True)
+                        return
 
-                response = errors['item_already_exists'][locale]
-                await ctx.respond(response % item_name, ephemeral=True)
-                return
+                    if price is None:
+                        response = errors['price_not_provided'][locale]
+                        await ctx.respond(response, ephemeral=True)
+                        return
 
-            if price is None:
-                await conn.commit()
-                await cursor.close()
-                await conn.close()
+                    role_id = role.id if role else None
+                    role_mention = ctx.guild.get_role(role_id) if role_id else "`None`"
+                    description = description or "No description"
+                    returnable = True if returnable == -1 else bool(returnable)
 
-                response = errors['price_not_provided'][locale]
-                await ctx.respond(response, ephemeral=True)
-                return
+                    shop[item_name] = {
+                        'price': price,
+                        'role_id': role_id,
+                        'description': description,
+                        'returnable': returnable,
+                    }
+                    await update_value(cursor, 'shop', shop)
+                    await conn.commit()
+                    response = command_texts['add_success'][locale]
+                    placeholders = (item_name, price, role_mention, description, returnable)
+                    print(f"[DEBUG] User {ctx.author} ({ctx.author.id}) added item: {shop[item_name]}")
+                    await ctx.respond(response % placeholders, allowed_mentions=NO_MENTIONS)
+                    return
 
-            role_id = role.id if role else None
-            role_mention = ctx.guild.get_role(role_id) if role_id else "`None`"
-            description = description or "No description"
-            returnable = True if returnable == -1 else bool(returnable)
+                if action == "Edit":
+                    if item_name not in list(shop):
+                        response = errors['item_doesnt_exist'][locale]
+                        await ctx.respond(response % item_name, ephemeral=True)
+                        return
 
-            shop[item_name] = {
-                'price': price,
-                'role_id': role_id,
-                'description': description,
-                'returnable': returnable,
-            }
-            await update_value(cursor, 'shop', shop)
-            await conn.commit()
-            await cursor.close()
-            await conn.close()
-            response = command_texts['add_success'][locale]
-            placeholders = (item_name, price, role_mention, description, returnable)
-            await ctx.respond(response % placeholders, allowed_mentions=NO_MENTIONS)
-            return
+                    item_details = shop[item_name]
+                    price = item_details['price'] if price is None else price
+                    no_description = command_texts['no_description'][locale]
+                    description = description or no_description
+                    if remove_role:
+                        role_id = None
+                        role_mention = command_texts['no_role'][locale]
+                    else:
+                        role_id = item_details['role_id'] if not role else role.id
+                        if role_id:
+                            role_mention = ctx.guild.get_role(role_id)
+                        else:
+                            role_mention = command_texts['no_role'][locale]
+                    returnable = item_details['returnable'] if returnable == -1 else bool(returnable)
 
-        if action == "Edit":
-            if item_name not in list(shop):
-                await conn.commit()
-                await cursor.close()
-                await conn.close()
+                    changes = ""
+                    if price != shop[item_name]['price']:
+                        response = command_texts['price_change'][locale]
+                        placeholders = (shop[item_name]['price'], price)
 
-                response = errors['item_doesnt_exist'][locale]
-                await ctx.respond(response % item_name, ephemeral=True)
-                return
+                        changes += response % placeholders
+                        shop[item_name]['price'] = price
 
-            item_details = shop[item_name]
-            price = item_details['price'] if price is None else price
-            no_description = command_texts['no_description'][locale]
-            description = description or no_description
-            if remove_role:
-                role_id = None
-                role_mention = command_texts['no_role'][locale]
-            else:
-                role_id = item_details['role_id'] if not role else role.id
-                if role_id:
-                    role_mention = ctx.guild.get_role(role_id)
-                else:
-                    role_mention = command_texts['no_role'][locale]
-            returnable = item_details['returnable'] if returnable == -1 else bool(returnable)
+                    if role_id != shop[item_name]['role_id']:
+                        response = command_texts['role_change'][locale]
+                        if shop[item_name]['role_id']:
+                            role_mention_old = ctx.guild.get_role(shop[item_name]['role_id']).mention
+                        else:
+                            role_mention_old = command_texts['no_role'][locale]
+                        placeholders = (role_mention_old, role_mention)
 
-            changes = ""
-            if price != shop[item_name]['price']:
-                response = command_texts['price_change'][locale]
-                placeholders = (shop[item_name]['price'], price)
+                        changes += response % placeholders
+                        shop[item_name]['role_id'] = role_id
 
-                changes += response % placeholders
-                shop[item_name]['price'] = price
+                    if description != shop[item_name]['description']:
+                        response = command_texts['description_change'][locale]
+                        placeholders = (shop[item_name]['description'], description)
 
-            if role_id != shop[item_name]['role_id']:
-                response = command_texts['role_change'][locale]
-                if shop[item_name]['role_id']:
-                    role_mention_old = ctx.guild.get_role(shop[item_name]['role_id']).mention
-                else:
-                    role_mention_old = command_texts['no_role'][locale]
-                placeholders = (role_mention_old, role_mention)
+                        changes += response % placeholders
+                        shop[item_name]['description'] = description
 
-                changes += response % placeholders
-                shop[item_name]['role_id'] = role_id
+                    if returnable != shop[item_name]['returnable']:
+                        response = command_texts['returnable_change'][locale]
+                        placeholders = (shop[item_name]['returnable'], returnable)
 
-            if description != shop[item_name]['description']:
-                response = command_texts['description_change'][locale]
-                placeholders = (shop[item_name]['description'], description)
+                        changes += response % placeholders
+                        shop[item_name]['returnable'] = returnable
 
-                changes += response % placeholders
-                shop[item_name]['description'] = description
+                    await update_value(cursor, 'shop', shop)
+                    await conn.commit()
 
-            if returnable != shop[item_name]['returnable']:
-                response = command_texts['returnable_change'][locale]
-                placeholders = (shop[item_name]['returnable'], returnable)
+                    response = command_texts['edit_success'][locale]
+                    placeholders = (item_name, changes)
+                    print(f"[DEBUG] User {ctx.author} ({ctx.author.id}) edited item: {shop[item_name]} with changes: {changes}")
+                    await ctx.respond(response % placeholders, allowed_mentions=NO_MENTIONS)
+                    return
 
-                changes += response % placeholders
-                shop[item_name]['returnable'] = returnable
+                if action == "Remove":
+                    if item_name not in shop:
+                        response = errors['item_doesnt_exist'][locale]
+                        await ctx.respond(response % item_name, ephemeral=True)
+                        return
 
-            await update_value(cursor, 'shop', shop)
-            await conn.commit()
-            await cursor.close()
-            await conn.close()
+                    print(f"[DEBUG] User {ctx.author} ({ctx.author.id}) removed item: {shop[item_name]}")
+                    del shop[item_name]
+                    await update_value(cursor, 'shop', shop)
+                    await conn.commit()
 
-            response = command_texts['edit_success'][locale]
-            placeholders = (item_name, changes)
-            await ctx.respond(response % placeholders, allowed_mentions=NO_MENTIONS)
-            return
-
-        if action == "Remove":
-            if item_name not in shop:
-                await conn.commit()
-                await cursor.close()
-                await conn.close()
-
-                response = errors['item_doesnt_exist'][locale]
-                await ctx.respond(response % item_name, ephemeral=True)
-                return
-
-            del shop[item_name]
-            await update_value(cursor, 'shop', shop)
-            await conn.commit()
-            await cursor.close()
-            await conn.close()
-
-            response = command_texts['remove_success'][locale]
-            await ctx.respond(response % item_name)
-            return
-
-        # when none of the ifs get caught
-        await conn.commit()
-        await cursor.close()
-        await conn.close()
+                    response = command_texts['remove_success'][locale]
+                    await ctx.respond(response % item_name)
+                    return
+        # if none of the ifs get caught (should never happen)
+        print(f"[DEBUG] Unexpected action or error occurred by user {ctx.author} ({ctx.author.id})")
         await ctx.respond("?????")
         return
 
