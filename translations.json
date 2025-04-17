@@ -95,7 +95,7 @@
             "texts": {
                 "response": {
                     "pl": "Ten bot jest napisany w Pythonie, a jego kod ma `3108` linijek oraz `73106` znaków (nie wliczając spacji) w czasie pisania tego (<t:1664639078:D>)",
-                    "en": "This bot was written in Python and it's code has `3108` lines and `73106` characters (excluding spaces) at the time of writing this (<t:1664639078:D>)"
+                    "en": "This bot was written in Python and its code has `3108` lines and `73106` characters (excluding spaces) at the time of writing this (<t:1664639078:D>)"
                 }
             }
         },
