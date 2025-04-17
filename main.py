@@ -197,7 +197,7 @@ async def on_member_join(member):
 def find_used_invite(cursor, invites_before_join, invites_after_join):
     for inv in invites_after_join:
         if inv in invites_before_join:
-            if inv.uses <= invites_before_join[inv.code].uses:
+            if inv.uses <= find_invite_by_code(invites_before_join, inv.code).uses:
                 continue
             print("old invite used")
             return inv
