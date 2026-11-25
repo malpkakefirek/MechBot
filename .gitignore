@@ -5,3 +5,4 @@ __pycache__
 ets
 mechbot.db
 errors.txt
+*.bak

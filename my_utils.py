@@ -1,5 +1,5 @@
 """Utilites for my bot"""
-from handle_database import select_value    # , update_value
+from handle_database import get_locale
 
 from math import ceil
 import json
@@ -88,11 +88,8 @@ def get_lvl(xp: float):
     return xp_list[-1]
 
 
-async def get_placement_sign(user_id: int, database_name):
-    """Returns a placement display when provided with a user_id and database"""
-    async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
-        async with conn.cursor() as cursor:
-            database = await select_value(cursor, database_name)
+async def get_placement_sign(user_id: int, database: dict):
+    """Returns a placement display when provided with a user_id and a loaded ranking"""
     placement_medals = {1: ":first_place:", 2: ":second_place:", 3: ":third_place:"}
 
     if str(user_id) not in database.keys():
@@ -116,9 +113,8 @@ async def get_placements_embed(bot, ctx, database: str, leaderboard: dict, page:
     """Returns an embed with the placements"""
     async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
         async with conn.cursor() as cursor:
-            locales = await select_value(cursor, 'locales')
+            locale = await get_locale(cursor, ctx.author.id)
     command_texts = TRANSLATIONS['get_placements_embed']
-    locale = locales.get(str(ctx.author.id), 'pl')
 
     text = ""
     user_position = 1

@@ -7,7 +7,22 @@ from dotenv import load_dotenv
 
 # from keep_alive import keep_alive
 from initialize_database import initialize_database
-from handle_database import select_value, update_value, select_value_sync, update_value_sync
+from handle_database import (
+    get_permitted_sync,
+    add_permitted_sync,
+    get_invite,
+    set_invite,
+    get_balance,
+    set_money,
+    add_money,
+    get_xp,
+    set_xp,
+    get_temp_xp,
+    set_temp_xp,
+    get_alert_channel,
+    get_xp_channel_multiplier,
+    get_xp_category_multiplier,
+)
 from cogs.xp_system import update_user_lvl_roles
 from my_utils import update_translations
 
@@ -42,15 +57,12 @@ previous_invitations = dict()
 
 # Give default owner permission, if he doesn't have it already
 cursor = conn.cursor()
-owner_ids = select_value_sync(cursor, 'permitted')
-
-
-if OWNER_ID not in owner_ids:
-    owner_ids.append(OWNER_ID)
-    update_value_sync(cursor, 'permitted', owner_ids)
+if OWNER_ID not in get_permitted_sync(cursor):
+    add_permitted_sync(cursor, OWNER_ID)
     conn.commit()
     print("\nADDED MALPKAKEFIREK AS THE OWNER\n")
 cursor.close()
+conn.close()
 
 
 # ========== LOADING COGS =========== #
@@ -116,14 +128,6 @@ async def on_member_join(member):
 
     async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
         async with conn.execute("BEGIN TRANSACTION") as cursor:
-            value = await select_value(cursor, 'invites')
-
-            # if the guild never had any invites
-            if str(member.guild.id) not in value:
-                value[str(member.guild.id)] = dict()
-                print("assigned guild to invites dict")
-                await update_value(cursor, 'invites', value)
-
             # get invites' uses before join
             invites_before_join = previous_invitations.get(str(member.guild.id), [])
 
@@ -144,10 +148,7 @@ async def on_member_join(member):
             # fetch invites after join
             invites_after_join = await member.guild.invites()
 
-            # fetch my profile (disabled)
-            # malpka = await member.guild.fetch_member(336475402535174154)
-            money = await select_value(cursor, 'money')
-            alert_channel_id = int(await select_value(cursor, 'alert_channel'))
+            alert_channel_id = await get_alert_channel(cursor)
 
             # if user is a bot
             if member.bot:
@@ -159,7 +160,7 @@ async def on_member_join(member):
                 return
 
             # find the used invite
-            inv = find_used_invite(cursor, invites_before_join, invites_after_join)
+            inv = find_used_invite(invites_before_join, invites_after_join)
 
             if inv is None:
                 await conn.commit()
@@ -170,31 +171,29 @@ async def on_member_join(member):
                 return
 
             # attach an invite to member id
-            invites = await select_value(cursor, 'invites')
-            invites[str(member.id)] = [inv.code, inv.inviter.name, inv.inviter.id]
-            await update_value(cursor, 'invites', invites)
+            await set_invite(cursor, member.id, inv.code, inv.inviter.name, inv.inviter.id)
 
             # update invites' num of uses
             previous_invitations[str(member.guild.id)] = invites_after_join
 
             # if member invited himself, don't give money
             if member.id == inv.inviter.id:
+                await conn.commit()
                 return
 
             # add money
-            money[str(inv.inviter.id)] = money.get(str(inv.inviter.id), 0) + 50
-            await update_value(cursor, 'money', money)
+            new_balance = await add_money(cursor, inv.inviter.id, 50)
             await conn.commit()
 
             # send all alerts
-            print(f"Added 50 money to user {inv.inviter.name} for inviting {member.name} (now at {money[str(inv.inviter.id)]})")
+            print(f"Added 50 money to user {inv.inviter.name} for inviting {member.name} (now at {new_balance})")
             await member.guild.get_channel(alert_channel_id).send(
-                f"Użytkownik `{inv.inviter.name}` otrzymał 50 mech coinów za zaproszenie {member.mention} (teraz {money[str(inv.inviter.id)]}) [`{inv.code}`]"
+                f"Użytkownik `{inv.inviter.name}` otrzymał 50 mech coinów za zaproszenie {member.mention} (teraz {new_balance}) [`{inv.code}`]"
             )
             return
 
 
-def find_used_invite(cursor, invites_before_join, invites_after_join):
+def find_used_invite(invites_before_join, invites_after_join):
     for inv in invites_after_join:
         if inv in invites_before_join:
             if inv.uses <= find_invite_by_code(invites_before_join, inv.code).uses:
@@ -220,8 +219,8 @@ async def on_member_remove(member):
 
     async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
         async with conn.cursor() as cursor:
-            invites = await select_value(cursor, 'invites')
-            alert_channel_id = int(await select_value(cursor, 'alert_channel'))
+            invite = await get_invite(cursor, member.id)
+            alert_channel_id = await get_alert_channel(cursor)
 
         if member.bot:
             print(f"{member.name} left the server, but was a bot")
@@ -231,20 +230,18 @@ async def on_member_remove(member):
             return
 
         # remove money from inviter if invitee leaves
-        if str(member.id) in invites:
-            inviter_id = invites[str(member.id)][2]
+        if invite:
+            inviter_id = invite[2]
             async with conn.execute("BEGIN TRANSACTION") as cursor:
-                money = await select_value(cursor, 'money')
-                money[str(inviter_id)] -= 50
-                await update_value(cursor, 'money', money)
+                new_balance = await add_money(cursor, inviter_id, -50)
                 await conn.commit()
 
             inviter = bot.get_user(inviter_id) or await bot.fetch_user(inviter_id)
             inviter_name = inviter.name if inviter else inviter_id
 
-            print(f"REMOVED 50 MONEY FROM {inviter_name} (now {money[str(inviter_id)]})")
+            print(f"REMOVED 50 MONEY FROM {inviter_name} (now {new_balance})")
             await member.guild.get_channel(alert_channel_id).send(
-                f"Usunięto 50 mech coinów użytkownikowi `{inviter_name}` (teraz {money[str(inviter_id)]}), ponieważ użytkownik `{member.name}` wyszedł z serwera :pensive:"
+                f"Usunięto 50 mech coinów użytkownikowi `{inviter_name}` (teraz {new_balance}), ponieważ użytkownik `{member.name}` wyszedł z serwera :pensive:"
             )
             return
 
@@ -275,65 +272,55 @@ async def on_message(message):
         await bot.process_commands(message)
         return
 
-    str_user_id = str(message.author.id)
-    str_channel_id = str(message.channel.id)
-    str_category_id = str(message.channel.category_id)
+    user_id = message.author.id
 
     async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
         async with conn.execute("BEGIN TRANSACTION") as cursor:
-            xp = await select_value(cursor, 'xp')
-            temp_xp = await select_value(cursor, 'temp_xp')
-            money = await select_value(cursor, 'money')
-            xp_channel_settings = await select_value(cursor, 'xp_channel_settings')
-            xp_category_settings = await select_value(cursor, 'xp_category_settings')
-
             # == XP == #
             if message.channel.type != discord.ChannelType.text:
                 return
 
-            # channel's xp setting
-            if str_channel_id in xp_channel_settings:
-                str_xp_added = str(xp_channel_settings[str_channel_id])
-            # category's xp setting
-            elif str_category_id in xp_category_settings:
-                str_xp_added = str(xp_category_settings[str_category_id])
-            # global xp setting
+            # channel's xp setting, category's xp setting, then global xp setting
+            channel_xp = await get_xp_channel_multiplier(cursor, message.channel.id)
+            category_xp = None
+            if message.channel.category_id:
+                category_xp = await get_xp_category_multiplier(cursor, message.channel.category_id)
+            if channel_xp is not None:
+                xp_added = channel_xp
+            elif category_xp is not None:
+                xp_added = category_xp
             else:
-                str_xp_added = str(1)
+                xp_added = 1.0
+
+            old_xp = await get_xp(cursor, user_id)
+            temp_xp = await get_temp_xp(cursor, user_id)
 
             # new member
-            if str_user_id not in xp:
-                xp[str_user_id] = str(0)
-                print(f"First message for user {message.author.name} ({str_user_id}) [xp]")
+            if old_xp == 0:
+                print(f"First message for user {message.author.name} ({user_id}) [xp]")
 
-            if str_user_id not in temp_xp:
-                temp_xp[str_user_id] = str(0)
+            if await get_balance(cursor, user_id) == 0:
+                await set_money(cursor, user_id, 0)
 
-            if str_user_id not in money:
-                money[str_user_id] = 0
-
-            old_xp = float(xp[str_user_id])
-
-            # if a member wrote a msg in a whitelisted channel, add {str_xp_added} xp to that member
-            if float(str_xp_added) > 0:
-                xp[str_user_id] = str(round(float(xp[str_user_id]) + float(str_xp_added), 1))
-                temp_xp[str_user_id] = str(round(float(temp_xp[str_user_id]) + float(str_xp_added), 1))
+            # if a member wrote a msg in a whitelisted channel, add {xp_added} xp to that member
+            new_xp = round(old_xp + xp_added, 1) if xp_added > 0 else old_xp
+            if xp_added > 0:
+                temp_xp = round(temp_xp + xp_added, 1)
 
             # add money for each 5 xp
-            if float(temp_xp[str_user_id]) >= 5:
-                money[str_user_id] += int(float(temp_xp[str_user_id]) / 5)    # division without the remainder
-                temp_xp[str_user_id] = str(float(temp_xp[str_user_id]) % 5)    # leave the remainder from division in temp_xp
+            if temp_xp >= 5:
+                await add_money(cursor, user_id, int(temp_xp / 5))   # division without the remainder
+                temp_xp = float(temp_xp % 5)                         # leave the remainder in temp_xp
 
-            await update_value(cursor, 'temp_xp', temp_xp)
-            await update_value(cursor, 'money', money)
-            await update_value(cursor, 'xp', xp)
+            await set_temp_xp(cursor, user_id, temp_xp)
+            await set_xp(cursor, user_id, new_xp)
             await conn.commit()
 
-        if float(str_xp_added) > 0:
-            print(f"Added {str_xp_added} xp to \"{message.author.name}\" in guild \"{message.guild.name}\" (now {xp[str_user_id]})")
+        if xp_added > 0:
+            print(f"Added {xp_added} xp to \"{message.author.name}\" in guild \"{message.guild.name}\" (now {new_xp})")
 
         async with conn.execute("BEGIN TRANSACTION") as cursor:
-            await update_user_lvl_roles(message, bot, message.author, old_xp, float(xp[str_user_id]), cursor)
+            await update_user_lvl_roles(message, bot, message.author, old_xp, float(new_xp), cursor)
             await conn.commit()
     await bot.process_commands(message)
 

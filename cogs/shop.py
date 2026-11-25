@@ -7,8 +7,16 @@ from discord.ext import commands
 from discord.commands import SlashCommandGroup
 # from discord.errors import Forbidden
 import aiosqlite
-from handle_database import select_value, update_value  # , select_value_sync
-import json
+from handle_database import (
+    add_money,
+    get_balance,
+    get_locale,
+    get_shop,
+    get_shop_item,
+    get_shop_sync,
+    remove_shop_item,
+    set_shop_item,
+)
 # from math import ceil
 # import time
 
@@ -17,11 +25,11 @@ tracemalloc.start()
 
 # =========FUNCTIONS========== #
 
-# db['shop'] = {'some item name': {'price': int, 'role_id': Optional[int], 'description': str, 'returnable': bool}, ...}
+# {'some item name': {'price': int, 'role_id': Optional[int], 'description': str, 'returnable': bool}, ...}
 async def get_shop_autocomplete(ctx: discord.AutocompleteContext):
     async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
         async with conn.cursor() as cursor:
-            shop = await select_value(cursor, 'shop')
+            shop = await get_shop(cursor)
     return shop
 
 
@@ -29,11 +37,10 @@ def get_shop_list():
     import sqlite3
     conn_temp = sqlite3.connect('mechbot.db')
     cursor = conn_temp.cursor()
-    cursor.execute("SELECT value FROM mechy WHERE key = 'shop'")
-    val = json.loads(cursor.fetchone()[0])
+    shop = get_shop_sync(cursor)
     cursor.close()
     conn_temp.close()
-    return val
+    return shop
 
 
 shop_choices = get_shop_list()
@@ -81,9 +88,8 @@ class Shop(discord.Cog):
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
             async with conn.cursor() as cursor:
-                locales = await select_value(cursor, 'locales')
+                locale = await get_locale(cursor, ctx.author.id)
         errors = TRANSLATIONS['errors']
-        locale = locales.get(str(ctx.author.id), 'pl')
 
         if isinstance(error, commands.MissingPermissions):
             response = errors['missing_permissions'][locale]
@@ -105,11 +111,10 @@ class Shop(discord.Cog):
     ):
         async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
             async with conn.cursor() as cursor:
-                locales = await select_value(cursor, 'locales')
                 command_texts = TRANSLATIONS['commands']['shop list']['texts']
-                locale = locales.get(str(ctx.author.id), 'pl')
+                locale = await get_locale(cursor, ctx.author.id)
 
-                shop = await select_value(cursor, 'shop')
+                shop = await get_shop(cursor)
         text = ""
         for item_name in shop:
             price = shop[item_name]['price']
@@ -148,18 +153,16 @@ class Shop(discord.Cog):
     ):
         async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
             async with conn.cursor() as cursor:
-                locales = await select_value(cursor, 'locales')
-            command_texts = TRANSLATIONS['commands']['shop buy']['texts']
-            errors = TRANSLATIONS['errors']
-            locale = locales.get(str(ctx.author.id), 'pl')
+                command_texts = TRANSLATIONS['commands']['shop buy']['texts']
+                errors = TRANSLATIONS['errors']
+                locale = await get_locale(cursor, ctx.author.id)
 
             async with conn.execute("BEGIN TRANSACTION") as cursor:
-                money = await select_value(cursor, 'money')
-                shop = await select_value(cursor, 'shop')
                 item = item.lower()
-                item_details = shop[item]
-                if str(ctx.author.id) not in money or money[str(ctx.author.id)] < item_details['price']:
-                    response = errors['insufficient_funds'][locale] % (item_details['price'] - money[str(ctx.author.id)], CURRENCY_NAME)
+                item_details = await get_shop_item(cursor, item)
+                balance = await get_balance(cursor, ctx.author.id)
+                if balance < item_details['price']:
+                    response = errors['insufficient_funds'][locale] % (item_details['price'] - balance, CURRENCY_NAME)
                     await ctx.respond(response)
                     return
 
@@ -179,8 +182,7 @@ class Shop(discord.Cog):
                     # TODO implement or remove this feature
                     await ctx.respond("This feature is not yet implemented!")
                     return
-                money[str(ctx.author.id)] -= item_details['price']
-                await update_value(cursor, 'money', money)
+                await add_money(cursor, ctx.author.id, -item_details['price'])
                 await conn.commit()
 
         response = command_texts['response'][locale]
@@ -206,18 +208,13 @@ class Shop(discord.Cog):
     ):
         async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
             async with conn.cursor() as cursor:
-                locales = await select_value(cursor, 'locales')
-            command_texts = TRANSLATIONS['commands']['shop return']['texts']
-            errors = TRANSLATIONS['errors']
-            locale = locales.get(str(ctx.author.id), 'pl')
+                command_texts = TRANSLATIONS['commands']['shop return']['texts']
+                errors = TRANSLATIONS['errors']
+                locale = await get_locale(cursor, ctx.author.id)
 
             async with conn.execute("BEGIN TRANSACTION") as cursor:
-                money = await select_value(cursor, 'money')
-                shop = await select_value(cursor, 'shop')
                 item = item.lower()
-                item_details = shop[item]
-                if str(ctx.author.id) not in money:
-                    money[str(ctx.author.id)] = 0
+                item_details = await get_shop_item(cursor, item)
 
                 if item_details['role_id']:
                     role = ctx.guild.get_role(item_details['role_id'])
@@ -235,8 +232,7 @@ class Shop(discord.Cog):
                     # TODO implement or remove this feature
                     await ctx.respond("This feature is not yet implemented!")
                     return
-                money[str(ctx.author.id)] += item_details['price']
-                await update_value(cursor, 'money', money)
+                await add_money(cursor, ctx.author.id, item_details['price'])
                 await conn.commit()
 
         response = command_texts['response'][locale]
@@ -343,12 +339,11 @@ class Shop(discord.Cog):
     ):
         async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
             async with conn.execute("BEGIN TRANSACTION") as cursor:
-                locales = await select_value(cursor, 'locales')
                 command_texts = TRANSLATIONS['commands']['shop modify']['texts']
                 errors = TRANSLATIONS['errors']
-                locale = locales.get(str(ctx.author.id), 'pl')
+                locale = await get_locale(cursor, ctx.author.id)
 
-                shop = await select_value(cursor, 'shop')
+                shop = await get_shop(cursor)
                 item_name = item_name.lower()
 
                 if action == "Add":
@@ -367,17 +362,17 @@ class Shop(discord.Cog):
                     description = description or "No description"
                     returnable = True if returnable == -1 else bool(returnable)
 
-                    shop[item_name] = {
+                    item_details = {
                         'price': price,
                         'role_id': role_id,
                         'description': description,
                         'returnable': returnable,
                     }
-                    await update_value(cursor, 'shop', shop)
+                    await set_shop_item(cursor, item_name, price, role_id, description, returnable)
                     await conn.commit()
                     response = command_texts['add_success'][locale]
                     placeholders = (item_name, price, role_mention, description, returnable)
-                    print(f"[DEBUG] User {ctx.author} ({ctx.author.id}) added item: {shop[item_name]}")
+                    print(f"[DEBUG] User {ctx.author} ({ctx.author.id}) added item: {item_details}")
                     await ctx.respond(response % placeholders, allowed_mentions=NO_MENTIONS)
                     return
 
@@ -387,7 +382,7 @@ class Shop(discord.Cog):
                         await ctx.respond(response % item_name, ephemeral=True)
                         return
 
-                    item_details = shop[item_name]
+                    item_details = await get_shop_item(cursor, item_name)
                     price = item_details['price'] if price is None else price
                     no_description = command_texts['no_description'][locale]
                     description = description or no_description
@@ -403,44 +398,51 @@ class Shop(discord.Cog):
                     returnable = item_details['returnable'] if returnable == -1 else bool(returnable)
 
                     changes = ""
-                    if price != shop[item_name]['price']:
+                    if price != item_details['price']:
                         response = command_texts['price_change'][locale]
-                        placeholders = (shop[item_name]['price'], price)
+                        placeholders = (item_details['price'], price)
 
                         changes += response % placeholders
-                        shop[item_name]['price'] = price
+                        item_details['price'] = price
 
-                    if role_id != shop[item_name]['role_id']:
+                    if role_id != item_details['role_id']:
                         response = command_texts['role_change'][locale]
-                        if shop[item_name]['role_id']:
-                            role_mention_old = ctx.guild.get_role(shop[item_name]['role_id']).mention
+                        if item_details['role_id']:
+                            role_mention_old = ctx.guild.get_role(item_details['role_id']).mention
                         else:
                             role_mention_old = command_texts['no_role'][locale]
                         placeholders = (role_mention_old, role_mention)
 
                         changes += response % placeholders
-                        shop[item_name]['role_id'] = role_id
+                        item_details['role_id'] = role_id
 
-                    if description != shop[item_name]['description']:
+                    if description != item_details['description']:
                         response = command_texts['description_change'][locale]
-                        placeholders = (shop[item_name]['description'], description)
+                        placeholders = (item_details['description'], description)
 
                         changes += response % placeholders
-                        shop[item_name]['description'] = description
+                        item_details['description'] = description
 
-                    if returnable != shop[item_name]['returnable']:
+                    if returnable != item_details['returnable']:
                         response = command_texts['returnable_change'][locale]
-                        placeholders = (shop[item_name]['returnable'], returnable)
+                        placeholders = (item_details['returnable'], returnable)
 
                         changes += response % placeholders
-                        shop[item_name]['returnable'] = returnable
+                        item_details['returnable'] = returnable
 
-                    await update_value(cursor, 'shop', shop)
+                    await set_shop_item(
+                        cursor,
+                        item_name,
+                        item_details['price'],
+                        item_details['role_id'],
+                        item_details['description'],
+                        item_details['returnable'],
+                    )
                     await conn.commit()
 
                     response = command_texts['edit_success'][locale]
                     placeholders = (item_name, changes)
-                    print(f"[DEBUG] User {ctx.author} ({ctx.author.id}) edited item: {shop[item_name]} with changes: {changes}")
+                    print(f"[DEBUG] User {ctx.author} ({ctx.author.id}) edited item: {item_details} with changes: {changes}")
                     await ctx.respond(response % placeholders, allowed_mentions=NO_MENTIONS)
                     return
 
@@ -451,8 +453,7 @@ class Shop(discord.Cog):
                         return
 
                     print(f"[DEBUG] User {ctx.author} ({ctx.author.id}) removed item: {shop[item_name]}")
-                    del shop[item_name]
-                    await update_value(cursor, 'shop', shop)
+                    await remove_shop_item(cursor, item_name)
                     await conn.commit()
 
                     response = command_texts['remove_success'][locale]
