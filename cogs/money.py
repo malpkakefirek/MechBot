@@ -1,14 +1,13 @@
 from my_utils import Paginator, get_placements_embed, get_placement_sign, CURRENCY_NAME, NO_MENTIONS, TRANSLATIONS
 
 import tracemalloc
-from sys import exc_info
 import discord
 from discord.ext import commands
 from discord.commands import SlashCommandGroup
-# from discord.errors import Forbidden
 import aiosqlite
 from handle_database import (
     add_money as db_add_money,
+    debit_money,
     get_balance,
     get_balances,
     get_locale,
@@ -40,40 +39,7 @@ class Money(discord.Cog):
         guild_only=True
     )
 
-    # =========EVENTS========== #
-
-    @discord.Cog.listener()
-    async def on_error(self, interaction):
-        exc = exc_info()
-        print(f"interacted failed for {interaction}")
-        if interaction.is_component():
-            print(interaction.data)
-        try:
-            interaction.respond(exc)
-        except Exception:
-            try:
-                user = await self.bot.fetch_user(336475402535174154)
-                await user.send(exc)
-            except Exception:
-                pass
-
-        with open("../errors.txt", 'a') as _f:
-            _f.write(exc)
-            _f.write("<<<================================>>>")
-
-
-    async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
-        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
-            async with conn.cursor() as cursor:
-                locale = await get_locale(cursor, ctx.author.id)
-        errors = TRANSLATIONS['errors']
-
-        if isinstance(error, commands.MissingPermissions):
-            response = errors['missing_permissions'][locale]
-            placeholders = error.missing_permissions[0].upper()
-            await ctx.respond(response % placeholders, ephemeral=True)
-            return
-        raise error  # Here we raise other errors to ensure they aren't ignored
+    # Application-command errors are handled centrally in main.py.
 
     # =========COMMANDS========== #
 
@@ -100,7 +66,7 @@ class Money(discord.Cog):
                 if user is None:
                     user = ctx.author
 
-                avatar_url = user.avatar.url
+                avatar_url = user.display_avatar.url
                 money = await get_balances(cursor)
         leaderboard_placement = await get_placement_sign(user.id, money)
         # If user has any money
@@ -162,7 +128,7 @@ class Money(discord.Cog):
             if user is None:
                 user = ctx.author
 
-            async with conn.execute("BEGIN TRANSACTION") as cursor:
+            async with conn.execute("BEGIN IMMEDIATE") as cursor:
                 balance = await db_add_money(cursor, user.id, money_amount)
                 await conn.commit()
 
@@ -202,7 +168,7 @@ class Money(discord.Cog):
             if user is None:
                 user = ctx.author
 
-            async with conn.execute("BEGIN TRANSACTION") as cursor:
+            async with conn.execute("BEGIN IMMEDIATE") as cursor:
                 balance = await db_add_money(cursor, user.id, -money_amount)
                 await conn.commit()
 
@@ -239,16 +205,26 @@ class Money(discord.Cog):
             command_texts = TRANSLATIONS['commands']['money pay']['texts']
 
             sender = ctx.author
-            async with conn.execute("BEGIN TRANSACTION") as cursor:
-                sender_balance = await get_balance(cursor, sender.id)
-                if sender_balance < money_amount:
-                    response = TRANSLATIONS['errors']['insufficient_funds'][locale]
-                    await ctx.respond(response)     # TODO possibly add info about missing balance
-                    return
+            debited = False
+            missing_amount = 0
+            sender_balance = 0
+            async with conn.cursor() as cursor:
+                await cursor.execute("BEGIN IMMEDIATE")
+                debited = await debit_money(cursor, sender.id, money_amount)
+                if debited:
+                    await db_add_money(cursor, receiver.id, money_amount)
+                    sender_balance = await get_balance(cursor, sender.id)
+                    await conn.commit()
+                else:
+                    balance = await get_balance(cursor, sender.id)
+                    missing_amount = max(0, money_amount - balance)
+                    await conn.rollback()
 
-                sender_balance = await db_add_money(cursor, sender.id, -money_amount)
-                await db_add_money(cursor, receiver.id, money_amount)
-                await conn.commit()
+        # Respond only after the transaction has been committed or rolled back.
+        if not debited:
+            response = TRANSLATIONS['errors']['insufficient_funds'][locale]
+            await ctx.respond(response % (missing_amount, CURRENCY_NAME))
+            return
 
         response = command_texts['response'][locale]
         placeholders = (

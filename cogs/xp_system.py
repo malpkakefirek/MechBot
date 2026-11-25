@@ -1,11 +1,11 @@
 from my_utils import Paginator, get_placement_sign, get_placements_embed, get_lvl, NO_MENTIONS, TRANSLATIONS
 
-from sys import exc_info
+import inspect
+import traceback
 from asyncio import Lock
 import discord
 from discord.ext import commands
 from discord.commands import SlashCommandGroup
-# from discord.errors import Forbidden
 import aiosqlite
 from handle_database import (
     get_locale,
@@ -13,8 +13,8 @@ from handle_database import (
     set_lvl_role,
     get_xp,
     get_all_xp,
-    set_xp,
-    add_xp,
+    add_xp as db_add_xp,
+    remove_xp as db_remove_xp,
     get_xp_channel_settings,
     get_xp_category_settings,
     get_xp_category_multiplier,
@@ -23,26 +23,40 @@ from handle_database import (
 )
 
 lock = Lock()
+OWNER_ID = 336475402535174154
 
 
 # =========FUNCTIONS========== #
 
-async def check_lvl_role_validity(ctx, user, new_lvl, cursor):
-    lvl_roles = await get_lvl_roles(cursor)
-    lvl_role = ctx.guild.get_role(lvl_roles[str(new_lvl)])
-    if lvl_role not in user.roles:
-        try:
-            await ctx.defer()
-        except Exception:
-            pass
-        print(f"Invalid role for user \"{user.name}\" in guild \"{ctx.guild.name}\"!")
-        all_user_roles_ids = [role.id for role in user.roles]
-        all_user_lvl_roles = [
-            ctx.guild.get_role(role_id) for role_id in lvl_roles.values() if role_id in all_user_roles_ids
-        ]
-        await user.remove_roles(*all_user_lvl_roles)
-        await user.add_roles(*[lvl_role])
-        print(f"Fixed role for user \"{user.name}\" in guild \"{ctx.guild.name}\"")
+async def _get_locale(user_id):
+    async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+        async with conn.cursor() as cursor:
+            return await get_locale(cursor, user_id)
+
+
+async def check_lvl_role_validity(ctx, user, new_lvl, lvl_roles):
+    """Remove stale level roles and ensure the user has the new level's role."""
+    new_role_id = lvl_roles.get(str(new_lvl))
+    new_lvl_role = ctx.guild.get_role(new_role_id) if new_role_id is not None else None
+    # Without a usable mapping/role there is nothing valid to assign.
+    if new_lvl_role is None:
+        return False
+    if new_lvl_role in user.roles:
+        return True
+
+    print(f"Invalid role for user \"{user.name}\" in guild \"{ctx.guild.name}\"!")
+    user_role_ids = {role.id for role in user.roles}
+    stale_roles = []
+    for role_id in lvl_roles.values():
+        role = ctx.guild.get_role(role_id) if role_id is not None else None
+        if role is not None and role != new_lvl_role and role.id in user_role_ids:
+            stale_roles.append(role)
+
+    if stale_roles:
+        await user.remove_roles(*stale_roles)
+    await user.add_roles(new_lvl_role)
+    print(f"Fixed role for user \"{user.name}\" in guild \"{ctx.guild.name}\"")
+    return True
 
 
 def get_required_xp_for_lvl(lvl: int):
@@ -50,46 +64,102 @@ def get_required_xp_for_lvl(lvl: int):
     return 2**(lvl+2)
 
 
-async def update_user_lvl_roles(ctx, bot, user, old_xp, new_xp, cursor):
+async def update_user_lvl_roles(ctx, bot, user, old_xp, new_xp, *, commit=None):
+    """Update a member's level roles.
+
+    Calling convention:
+        The XP/DB transaction must be committed before this coroutine is
+        awaited. Call it as ``await update_user_lvl_roles(ctx, bot, user,
+        old_xp, new_xp)``. If it has to be called while the caller still holds
+        an open transaction, pass a (sync or async) ``commit`` callback, e.g.
+        ``await update_user_lvl_roles(ctx, bot, user, old_xp, new_xp,
+        commit=conn.commit)``; it is called before any Discord API request.
+    """
     async with lock:
-        lvl_roles = await get_lvl_roles(cursor)
+        if commit is not None:
+            result = commit()
+            if inspect.isawaitable(result):
+                await result
 
-        old_lvl = get_lvl(old_xp)
-        new_lvl = get_lvl(new_xp)
-        lvls_added = []
+        # Never read role mappings through the caller's (possibly open)
+        # transaction; use a short, independent read instead.
+        async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+            async with conn.cursor() as cursor:
+                lvl_roles = await get_lvl_roles(cursor)
 
-        # if new lvl role doesn't exist yet
-        if str(new_lvl) not in lvl_roles:
-            # create all lvl roles below new_lvl_role that are missing
-            guild_lvl_roles = [role for role in ctx.guild.roles if role.name.endswith(" LVL]")]
-            for i in range(len(lvl_roles) + 1, new_lvl + 1):
-                if str(i) not in lvl_roles:
-                    role_id_list = [role.id for role in guild_lvl_roles if role.name == f"[{i} LVL]"]
-                    if role_id_list:
-                        lvl_roles[str(i)] = role_id_list[0]
-                        await set_lvl_role(cursor, i, role_id_list[0])
-                        print(f"Role \"[{i} LVL]\" already existed in guild \"{ctx.guild.name}\"")
-                    else:
-                        temp_lvl_role = await ctx.guild.create_role(
-                            name=f"[{i} LVL]",
-                            color=discord.Colour.purple()
-                        )
-                        lvl_roles[str(i)] = temp_lvl_role.id
-                        await set_lvl_role(cursor, i, temp_lvl_role.id)
-                        print(f"Created role \"[{i} LVL]\" in guild \"{ctx.guild.name}\"")
-                    lvls_added.append(str(i))
+        old_lvl = get_lvl(float(old_xp))
+        new_lvl = get_lvl(float(new_xp))
 
-        # return if levels didn't change
-        if new_lvl == old_lvl:
-            await check_lvl_role_validity(ctx, user, new_lvl, cursor)
+        # A slash-command user option may be a plain User (not a Member),
+        # which has neither .roles nor role-management methods.
+        member = ctx.guild.get_member(user.id)
+        if member is None:
+            try:
+                member = await ctx.guild.fetch_member(user.id)
+            except Exception:
+                member = None
+        if member is None:
             return
 
-        new_lvl_role = ctx.guild.get_role(lvl_roles[str(new_lvl)])
-        old_lvl_role = ctx.guild.get_role(lvl_roles[str(old_lvl)])
-        await user.remove_roles(old_lvl_role)
-        print(f"Removed role \"{old_lvl_role.name}\" from user \"{user.name}\" in guild \"{ctx.guild.name}\"")
-        await user.add_roles(new_lvl_role)
-        print(f"Added role \"{new_lvl_role.name}\" to user \"{user.name}\" in guild \"{ctx.guild.name}\"")
+        guild_lvl_roles = {}
+        for role in ctx.guild.roles:
+            if role.name.endswith(" LVL]"):
+                guild_lvl_roles.setdefault(role.name, []).append(role)
+
+        # Walk contiguous levels 1..new_lvl: len(lvl_roles) is not a level.
+        # A mapped role may also have been deleted from the guild.
+        new_role_ids = {}
+        for level in range(1, new_lvl + 1):
+            key = str(level)
+            role_id = lvl_roles.get(key)
+            role = ctx.guild.get_role(role_id) if role_id is not None else None
+            if role is not None:
+                continue
+
+            existing_roles = guild_lvl_roles.get(f"[{level} LVL]", [])
+            if existing_roles:
+                role = existing_roles[0]
+                print(f"Role \"{role.name}\" already existed in guild \"{ctx.guild.name}\"")
+            else:
+                role = await ctx.guild.create_role(
+                    name=f"[{level} LVL]",
+                    color=discord.Colour.purple()
+                )
+                print(f"Created role \"[{level} LVL]\" in guild \"{ctx.guild.name}\"")
+            lvl_roles[key] = role.id
+            new_role_ids[key] = role.id
+
+        # Persist the new mappings in a transaction of their own, after all
+        # Discord API calls and independently of any XP transaction.
+        if new_role_ids:
+            async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
+                async with conn.execute("BEGIN IMMEDIATE") as cursor:
+                    for key, role_id in new_role_ids.items():
+                        await set_lvl_role(cursor, int(key), role_id)
+                await conn.commit()
+
+        new_role_id = lvl_roles.get(str(new_lvl))
+        new_lvl_role = ctx.guild.get_role(new_role_id) if new_role_id is not None else None
+        if new_lvl_role is None:
+            return
+
+        if new_lvl == old_lvl:
+            await check_lvl_role_validity(ctx, member, new_lvl, lvl_roles)
+            return
+
+        old_role_id = lvl_roles.get(str(old_lvl))
+        old_lvl_role = ctx.guild.get_role(old_role_id) if old_role_id is not None else None
+        if (
+            old_lvl_role is not None
+            and old_lvl_role != new_lvl_role
+            and old_lvl_role in member.roles
+        ):
+            await member.remove_roles(old_lvl_role)
+            print(f"Removed role \"{old_lvl_role.name}\" from user \"{user.name}\" in guild \"{ctx.guild.name}\"")
+
+        if new_lvl_role not in member.roles:
+            await member.add_roles(new_lvl_role)
+            print(f"Added role \"{new_lvl_role.name}\" to user \"{user.name}\" in guild \"{ctx.guild.name}\"")
 
 
 # =========CLASSES========== #
@@ -111,42 +181,61 @@ class Xp(discord.Cog):
 
     # =========EVENTS========== #
 
-    @discord.Cog.listener()
-    async def on_error(self, interaction):
-        exc = exc_info()
-        print(f"interacted failed for {interaction}")
-        if interaction.is_component():
-            print(interaction.data)
+    async def _respond_error(self, ctx, message, *, ephemeral=False):
         try:
-            interaction.respond(exc)
+            if getattr(ctx, 'responded', False) and hasattr(ctx, 'send_followup'):
+                await ctx.send_followup(message, ephemeral=ephemeral)
+            elif isinstance(ctx, discord.ApplicationContext):
+                await ctx.respond(message, ephemeral=ephemeral)
+            else:
+                await ctx.send(message)
         except Exception:
-            try:
-                user = await self.bot.fetch_user(336475402535174154)
-                await user.send(exc)
-            except Exception:
-                pass
+            pass
 
-        with open("../errors.txt", 'a') as f:
-            f.write(exc)
-            f.write("<<<================================>>>")
+    async def _handle_error(self, ctx, error):
+        if getattr(error, '_xp_error_handled', False):
+            return
+        error._xp_error_handled = True
 
+        user = getattr(ctx, 'author', None) or getattr(ctx, 'user', None)
+        locale = await _get_locale(user.id if user is not None else 0)
+
+        if isinstance(error, commands.MissingPermissions):
+            response = TRANSLATIONS['errors']['missing_permissions'].get(
+                locale,
+                TRANSLATIONS['errors']['missing_permissions'].get('en', 'You do not have %s permission to execute this command!')
+            )
+            missing = error.missing_permissions[0].upper() if error.missing_permissions else 'required'
+            await self._respond_error(ctx, response % missing, ephemeral=True)
+            return
+
+        formatted = ''.join(traceback.format_exception(
+            type(error), error, getattr(error, '__traceback__', None)
+        ))
+        print(formatted)
+        try:
+            with open('errors.txt', 'a') as f:
+                f.write(formatted)
+                f.write("<<<================================>>>\n")
+        except Exception as file_error:
+            print(f"Could not write errors.txt: {file_error}")
+
+        try:
+            owner = await self.bot.fetch_user(OWNER_ID)
+            await owner.send(formatted[:1900])
+        except Exception:
+            pass
+
+        await self._respond_error(ctx, f"An error occurred: {error}", ephemeral=True)
+
+    # Application-command errors are handled centrally in main.py.
 
     async def cog_command_error(
         self,
         ctx: commands.Context,
         error: commands.CommandError,
     ):
-        if isinstance(error, commands.MissingPermissions):
-            async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
-                async with conn.cursor() as cursor:
-                    locale = await get_locale(cursor, ctx.author.id)
-            errors = TRANSLATIONS['errors']
-
-            response = errors['missing_permissions'][locale]
-            placeholders = error.missing_permissions[0].upper()
-            await ctx.respond(response % placeholders, ephemeral=True)
-            return
-        raise error  # Here we raise other errors to ensure they aren't ignored
+        await self._handle_error(ctx, error)
 
     # =========COMMANDS========== #
 
@@ -173,7 +262,7 @@ class Xp(discord.Cog):
                 if user is None:
                     user = ctx.author
 
-                avatar_url = user.avatar.url
+                avatar_url = user.display_avatar.url
                 xp = await get_all_xp(cursor)
         leaderboard_placement = await get_placement_sign(user.id, xp)
 
@@ -247,19 +336,20 @@ class Xp(discord.Cog):
             default=None,
         ),
     ):
+        if user is None:
+            print("no user provided")
+            user = ctx.author
+
         async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
-            async with conn.execute("BEGIN TRANSACTION") as cursor:
+            async with conn.execute("BEGIN IMMEDIATE") as cursor:
                 locale = await get_locale(cursor, ctx.author.id)
-                command_texts = TRANSLATIONS['commands']['xp add']['texts']
-
-                if user is None:
-                    print("no user provided")
-                    user = ctx.author
-
                 old_xp = await get_xp(cursor, user.id)
-                new_xp = await add_xp(cursor, user.id, xp_amount)
-                await update_user_lvl_roles(ctx, self.bot, user, old_xp, new_xp, cursor)
-                await conn.commit()
+                new_xp = await db_add_xp(cursor, user.id, xp_amount)
+            await conn.commit()
+
+        command_texts = TRANSLATIONS['commands']['xp add']['texts']
+        # XP is committed; role/Discord work happens after the transaction.
+        await update_user_lvl_roles(ctx, self.bot, user, old_xp, new_xp)
 
         lvl = get_lvl(new_xp)
         full_xp = new_xp
@@ -292,19 +382,20 @@ class Xp(discord.Cog):
             default=None,
         ),
     ):
+        if user is None:
+            user = ctx.author
+
         async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
-            async with conn.execute("BEGIN TRANSACTION") as cursor:
+            async with conn.execute("BEGIN IMMEDIATE") as cursor:
                 locale = await get_locale(cursor, ctx.author.id)
-                command_texts = TRANSLATIONS['commands']['xp remove']['texts']
-
-                if user is None:
-                    user = ctx.author
-
                 old_xp = await get_xp(cursor, user.id)
-                new_xp = max(old_xp - xp_amount, 0)
-                await set_xp(cursor, user.id, new_xp)
-                await update_user_lvl_roles(ctx, self.bot, user, old_xp, new_xp, cursor)
-                await conn.commit()
+                new_xp = await db_remove_xp(cursor, user.id, xp_amount)
+                if new_xp is None:
+                    new_xp = max(old_xp - xp_amount, 0)
+            await conn.commit()
+
+        command_texts = TRANSLATIONS['commands']['xp remove']['texts']
+        await update_user_lvl_roles(ctx, self.bot, user, old_xp, new_xp)
 
         lvl = get_lvl(new_xp)
         full_xp = new_xp
@@ -336,38 +427,40 @@ class Xp(discord.Cog):
             default=None,
         ),
     ):
+        if channel is None:
+            channel = ctx.channel
+
+        has_category = channel.category_id is not None
+        category_default = 1
         async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
-            async with conn.execute("BEGIN TRANSACTION") as cursor:
+            async with conn.execute("BEGIN IMMEDIATE") as cursor:
                 locale = await get_locale(cursor, ctx.author.id)
-                command_texts = TRANSLATIONS['commands']['xp channel']['texts']
-
-                if channel is None:
-                    channel = ctx.channel
-
                 if xp_amount == -1:
                     await set_xp_channel_multiplier(cursor, channel.id, None)
+                    if has_category:
+                        found_default = await get_xp_category_multiplier(cursor, channel.category_id)
+                        if found_default is not None:
+                            category_default = found_default
+                elif xp_amount < 0:
+                    pass
+                else:
+                    await set_xp_channel_multiplier(cursor, channel.id, xp_amount)
+            await conn.commit()
 
-                    category_default = None
-                    if channel.category_id:
-                        category_default = await get_xp_category_multiplier(cursor, channel.category_id)
-                    if category_default is None:
-                        category_default = 1
-                    await conn.commit()
+        command_texts = TRANSLATIONS['commands']['xp channel']['texts']
+        if xp_amount == -1:
+            response = command_texts['success_default'][locale]
+            # Some locales spell out "1 xp" and only take the channel mention;
+            # others have a placeholder for the effective default as well.
+            placeholders = (channel.mention, category_default)
+            if response.count('%s') == 1:
+                placeholders = (channel.mention,)
+            await ctx.respond(response % placeholders)
+            return
 
-                    response = command_texts['success_default'][locale]
-                    placeholders = (channel.mention, category_default)
-                    await ctx.respond(response % placeholders)
-                    return
-
-                if xp_amount < 0:
-                    await conn.commit()
-
-                    response = command_texts['negative_num'][locale]
-                    await ctx.respond(response, ephemeral=True)
-                    return
-
-                await set_xp_channel_multiplier(cursor, channel.id, xp_amount)
-                await conn.commit()
+        if xp_amount < 0:
+            await ctx.respond(command_texts['negative_num'][locale], ephemeral=True)
+            return
 
         response = command_texts['success_custom'][locale]
         placeholders = (channel.mention, xp_amount)
@@ -397,35 +490,35 @@ class Xp(discord.Cog):
             default=None,
         ),
     ):
+        if category is None:
+            category = ctx.channel.category
+
         async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
-            async with conn.execute("BEGIN TRANSACTION") as cursor:
+            async with conn.execute("BEGIN IMMEDIATE") as cursor:
                 locale = await get_locale(cursor, ctx.author.id)
-                command_texts = TRANSLATIONS['commands']['xp category']['texts']
-
                 if category is None:
-                    if not ctx.channel.category:
-                        response = command_texts['no_category'][locale]
-                        await ctx.respond(response)
-                        return
-                    category = ctx.channel.category
-
-                if xp_amount == -1:
+                    pass
+                elif xp_amount == -1:
                     await set_xp_category_multiplier(cursor, category.id, None)
-                    await conn.commit()
+                elif xp_amount < 0:
+                    pass
+                else:
+                    await set_xp_category_multiplier(cursor, category.id, xp_amount)
+            await conn.commit()
 
-                    response = command_texts['success_default'][locale]
-                    await ctx.respond(response % category.mention)
-                    return
+        command_texts = TRANSLATIONS['commands']['xp category']['texts']
+        if category is None:
+            await ctx.respond(command_texts['no_category'][locale])
+            return
 
-                if xp_amount < 0:
-                    await conn.commit()
+        if xp_amount == -1:
+            response = command_texts['success_default'][locale]
+            await ctx.respond(response % category.mention)
+            return
 
-                    response = command_texts['negative_num'][locale]
-                    await ctx.respond(response, ephemeral=True)
-                    return
-
-                await set_xp_category_multiplier(cursor, category.id, xp_amount)
-                await conn.commit()
+        if xp_amount < 0:
+            await ctx.respond(command_texts['negative_num'][locale], ephemeral=True)
+            return
 
         response = command_texts['success_custom'][locale]
         placeholders = (category.mention, xp_amount)
@@ -448,25 +541,14 @@ class Xp(discord.Cog):
             description_localizations=TRANSLATIONS['commands']['xp settings']['options']['channel_or_category'],
             default=None,
         ),
-        # category: discord.commands.Option(
-        #     discord.CategoryChannel,
-        #     description="Which category to show settings of (all if not provided)",
-        #     description_localizations=TRANSLATIONS['commands']['xp settings']['options'][''],
-        #     default=None,
-        # ),
     ):
         async with aiosqlite.connect('mechbot.db', timeout=10) as conn:
             async with conn.cursor() as cursor:
                 locale = await get_locale(cursor, ctx.author.id)
-                command_texts = TRANSLATIONS['commands']['xp settings']['texts']
-
-                # if category and channel:
-                #     await ctx.respond("You can only select one option!")
-                #     return
-
                 xp_channel_settings = await get_xp_channel_settings(cursor)
                 xp_category_settings = await get_xp_category_settings(cursor)
 
+        command_texts = TRANSLATIONS['commands']['xp settings']['texts']
         if isinstance(channel_or_category, discord.CategoryChannel):
             category = channel_or_category
             printable = ""
@@ -509,7 +591,7 @@ class Xp(discord.Cog):
                 xp_setting = xp_channel_settings[str(channel.id)]
                 await ctx.respond(f"{channel.mention} - {xp_setting} xp")
                 return
-            if str(channel.category.id) in xp_category_settings:
+            if channel.category and str(channel.category.id) in xp_category_settings:
                 xp_setting = xp_category_settings[str(channel.category.id)]
                 await ctx.respond(f"{channel.mention} - {xp_setting} xp")
                 return
@@ -547,7 +629,10 @@ class Xp(discord.Cog):
                     await ctx.respond(printable)
                     printable = ""
                 printable += f"> {channel.mention} - {category_setting} xp\n"
-        await ctx.respond(printable)
+        if printable:
+            await ctx.respond(printable)
+        else:
+            await ctx.respond(command_texts['no_category'][locale])
 
     @xp_system.command(
         name="leaderboard",
@@ -577,8 +662,12 @@ class Xp(discord.Cog):
             )
         }
 
-        embed = await get_placements_embed(self.bot, ctx, 'xp', leaderboard, page)
-        await ctx.respond(embed=embed, view=Paginator(ctx, 'xp', page, leaderboard))
+        paginator = Paginator(ctx, 'xp', page, leaderboard)
+        embed = await get_placements_embed(
+            self.bot, ctx, 'xp', leaderboard, paginator.page
+        )
+        paginator.embed = embed
+        await ctx.respond(embed=embed, view=paginator)
 
     @xp_system.command(
         name="summary",

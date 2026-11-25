@@ -399,7 +399,7 @@
             },
             "texts": {
                 "add_success": {
-                    "pl": "temp",
+                    "pl": "Dodano '%s' do sklepu! Szczegóły:\ncena = `%s`, \nrola = %s, \nopis = '%s', \nzwrotność = `%s`",
                     "en": "Added '%s' to the shop! Details:\nprice = `%s`, \nrole = %s, \ndescription = '%s', \nretunable = `%s`"
                 },
                 "no_description": {
@@ -520,7 +520,7 @@
                     "en": "Cannot set channel's xp setting to a negative number!"
                 },
                 "success_default": {
-                    "pl": "Pomyślnie ustawiono xp kanału %s na ustawienia defaultowe kategorii (1 xp)",
+                    "pl": "Pomyślnie ustawiono xp kanału %s na ustawienia domyślne kategorii (%s xp)",
                     "en": "Successfully set channel %s's xp setting to Category's default (%s xp)"
                 },
                 "success_custom": {
@@ -615,11 +615,11 @@
     },
     "send_embed": {
         "embeds_forbidden": {
-            "pl": "temp",
+            "pl": "Nie mogę wysyłać embedów. Sprawdź moje uprawnienia!",
             "en": "I can't send embeds. Check my pemissions!"
         },
         "messages_forbidden": {
-            "pl": "temp",
+            "pl": "Hej, wygląda na to, że nie mogę wysyłać wiadomości na kanale %s na serwerze %s\nCzy możesz powiadomić o tym właściciela? :slight_smile: ",
             "en": "Hey, it looks like I can't send messages in channel %s in %s\nCould you notify the owner about this? :slight_smile: "
         }
     },
@@ -635,6 +635,10 @@
         "page": {
             "pl": "Strona %s/%s",
             "en": "Page %s/%s"
+        },
+        "no_entries": {
+            "pl": "Brak wpisów do wyświetlenia.",
+            "en": "No entries to display."
         }
     }
 }

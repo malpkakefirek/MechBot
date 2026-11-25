@@ -51,14 +51,21 @@ def migrate_database(conn):
 
     expected = {}
 
+    # INSERT OR IGNORE keeps one row per id, so legacy lists with repeated ids
+    # must be verified by DISTINCT ids rather than raw list lengths.
+    ignored_id_columns = {
+        'permitted': 'user_id',
+        'xp_blacklist': 'channel_id',
+    }
+
     def count(table, amount):
         expected[table] = amount
 
     # permitted — list of user ids
-    permitted = legacy.get('permitted') or []
-    for user_id in permitted:
-        cursor.execute("INSERT OR IGNORE INTO permitted (user_id) VALUES (?)", (int(user_id),))
-    count('permitted', len(permitted))
+    permitted_ids = {int(user_id) for user_id in (legacy.get('permitted') or [])}
+    for user_id in permitted_ids:
+        cursor.execute("INSERT OR IGNORE INTO permitted (user_id) VALUES (?)", (user_id,))
+    count('permitted', len(permitted_ids))
 
     # lvl_roles — level -> role id
     lvl_roles = legacy.get('lvl_roles') or {}
@@ -121,13 +128,13 @@ def migrate_database(conn):
     count('shop', len(shop))
 
     # xp_blacklist — list of channel ids
-    blacklist = legacy.get('xp_blacklist') or []
-    for channel_id in blacklist:
+    blacklist_ids = {int(channel_id) for channel_id in (legacy.get('xp_blacklist') or [])}
+    for channel_id in blacklist_ids:
         cursor.execute(
             "INSERT OR IGNORE INTO xp_blacklist (channel_id) VALUES (?)",
-            (int(channel_id),),
+            (channel_id,),
         )
-    count('xp_blacklist', len(blacklist))
+    count('xp_blacklist', len(blacklist_ids))
 
     # xp multipliers — id -> float
     for table, key_column in (
@@ -162,11 +169,16 @@ def migrate_database(conn):
     else:
         count('alert_channel', 0)
 
-    conn.commit()
+    # Keep inserts and verification in one transaction: a failed check rolls
+    # everything back, leaving mechy as the untouched source of truth.
 
-    # Verify before removing the source of truth.
+    # Verify before removing the source of truth. Tables populated with
+    # INSERT OR IGNORE are checked with DISTINCT ids so duplicates in the
+    # legacy data cannot abort an otherwise successful migration.
     for table, amount in expected.items():
-        actual = cursor.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        id_column = ignored_id_columns.get(table)
+        counting = f"COUNT(DISTINCT {id_column})" if id_column else "COUNT(*)"
+        actual = cursor.execute(f"SELECT {counting} FROM {table}").fetchone()[0]
         if actual != amount:
             raise RuntimeError(
                 f"Migration check failed for {table}: expected {amount} rows, got {actual}. "

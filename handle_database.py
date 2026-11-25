@@ -46,6 +46,25 @@ def _shop_rows(rows):
     }
 
 
+def _db_id(value):
+    """Normalize a Discord id (int or numeric string) for an INTEGER column."""
+    return int(value)
+
+
+def _non_negative_int(amount):
+    value = int(amount)
+    if value < 0:
+        raise ValueError("amount must be non-negative")
+    return value
+
+
+def _non_negative_float(amount):
+    value = float(amount)
+    if value < 0:
+        raise ValueError("amount must be non-negative")
+    return value
+
+
 # ========== permitted ========== #
 
 async def get_permitted(cursor):
@@ -93,10 +112,16 @@ async def clear_lvl_roles(cursor):
 # ========== invites ========== #
 
 async def get_invite(cursor, member_id):
-    """Returns [invite_code, inviter_name, inviter_id] or None."""
+    """Return [invite_code, inviter_name, inviter_id] or None.
+
+    ``member_id`` may be an int or its string form (e.g. a key from
+    ``get_invites``). A missing/None id returns None instead of raising.
+    """
+    if member_id is None:
+        return None
     await cursor.execute(
         "SELECT invite_code, inviter_name, inviter_id FROM invites WHERE member_id = ?",
-        (int(member_id),),
+        (_db_id(member_id),),
     )
     row = await cursor.fetchone()
     return list(row) if row else None
@@ -111,14 +136,42 @@ async def get_invites(cursor):
 
 
 async def set_invite(cursor, member_id, invite_code, inviter_name, inviter_id):
+    """Upsert an invite. Ids accept int or numeric strings; missing text becomes ''."""
     await cursor.execute(
         _upsert_sql('invites', ('member_id', 'invite_code', 'inviter_name', 'inviter_id'), 'member_id'),
-        (int(member_id), str(invite_code), str(inviter_name), int(inviter_id)),
+        (
+            _db_id(member_id),
+            '' if invite_code is None else str(invite_code),
+            '' if inviter_name is None else str(inviter_name),
+            _db_id(inviter_id),
+        ),
     )
 
 
 async def delete_invite(cursor, member_id):
-    await cursor.execute("DELETE FROM invites WHERE member_id = ?", (int(member_id),))
+    """Delete an invite row. None/missing ids are a no-op."""
+    if member_id is None:
+        return
+    await cursor.execute("DELETE FROM invites WHERE member_id = ?", (_db_id(member_id),))
+
+
+async def take_invite(cursor, member_id):
+    """Atomically delete an invite and return [code, name, inviter_id] or None.
+
+    The single ``DELETE ... RETURNING`` statement makes read-and-remove safe
+    against duplicate leave events: only the first caller gets the invite.
+    Wrap this together with the inviter money debit in a caller-owned
+    transaction when both must succeed or fail as one unit.
+    """
+    if member_id is None:
+        return None
+    await cursor.execute(
+        "DELETE FROM invites WHERE member_id = ? "
+        "RETURNING invite_code, inviter_name, inviter_id",
+        (_db_id(member_id),),
+    )
+    row = await cursor.fetchone()
+    return list(row) if row else None
 
 
 # ========== money ========== #
@@ -149,6 +202,35 @@ async def add_money(cursor, user_id, amount):
         (int(user_id), int(amount)),
     )
     return await get_balance(cursor, user_id)
+
+
+async def debit_money(cursor, user_id, amount):
+    """Conditionally debit an existing balance; True iff the debit happened.
+
+    One guarded UPDATE does the check and the write atomically, so no
+    ``BEGIN IMMEDIATE`` is needed. Missing users and insufficient funds leave
+    the table untouched. Negative amounts are rejected.
+    """
+    amount = _non_negative_int(amount)
+    await cursor.execute(
+        "UPDATE money SET amount = amount - ? WHERE user_id = ? AND amount >= ?",
+        (amount, _db_id(user_id), amount),
+    )
+    return cursor.rowcount == 1
+
+
+async def add_money_if_exists(cursor, user_id, amount):
+    """Credit an existing balance atomically; False if the user has no row.
+
+    Unlike :func:`add_money`, this never creates a row. Negative amounts are
+    rejected; use :func:`debit_money` for a checked withdrawal.
+    """
+    amount = _non_negative_int(amount)
+    await cursor.execute(
+        "UPDATE money SET amount = amount + ? WHERE user_id = ?",
+        (amount, _db_id(user_id)),
+    )
+    return cursor.rowcount == 1
 
 
 async def delete_money(cursor, user_id):
@@ -185,6 +267,20 @@ async def add_xp(cursor, user_id, amount):
     return await get_xp(cursor, user_id)
 
 
+async def remove_xp(cursor, user_id, amount):
+    """Subtract XP atomically, clamped at zero, and return the resulting xp.
+
+    Missing users return 0.0 and no row is created. Negative amounts are
+    rejected so this helper can never add XP.
+    """
+    amount = _non_negative_float(amount)
+    await cursor.execute(
+        "UPDATE xp SET amount = MAX(0, amount - ?) WHERE user_id = ?",
+        (amount, _db_id(user_id)),
+    )
+    return await get_xp(cursor, user_id)
+
+
 async def clear_xp(cursor):
     await cursor.execute("DELETE FROM xp")
 
@@ -202,6 +298,16 @@ async def set_temp_xp(cursor, user_id, amount):
     )
 
 
+async def add_temp_xp(cursor, user_id, amount):
+    """Apply a delta atomically and return the resulting temp xp."""
+    await cursor.execute(
+        "INSERT INTO temp_xp (user_id, amount) VALUES (?, ?) "
+        "ON CONFLICT(user_id) DO UPDATE SET amount = temp_xp.amount + excluded.amount",
+        (int(user_id), float(amount)),
+    )
+    return await get_temp_xp(cursor, user_id)
+
+
 async def clear_temp_xp(cursor):
     await cursor.execute("DELETE FROM temp_xp")
 
@@ -209,17 +315,29 @@ async def clear_temp_xp(cursor):
 # ========== alert_channel ========== #
 
 async def get_alert_channel(cursor):
+    """Return the configured channel id, or None if it is unset/NULL."""
     await cursor.execute("SELECT channel_id FROM alert_channel WHERE id = 1")
     row = await cursor.fetchone()
-    return row[0] if row else None
+    return row[0] if row and row[0] is not None else None
+
+
+def get_alert_channel_sync(cursor):
+    """sqlite3 counterpart of :func:`get_alert_channel`."""
+    cursor.execute("SELECT channel_id FROM alert_channel WHERE id = 1")
+    row = cursor.fetchone()
+    return row[0] if row and row[0] is not None else None
 
 
 async def set_alert_channel(cursor, channel_id):
-    await cursor.execute(
-        "INSERT INTO alert_channel (id, channel_id) VALUES (1, ?) "
-        "ON CONFLICT(id) DO UPDATE SET channel_id = excluded.channel_id",
-        (int(channel_id),),
-    )
+    """Upsert the alert channel; ``None`` clears the setting instead of inserting NULL."""
+    if channel_id is None:
+        await cursor.execute("DELETE FROM alert_channel WHERE id = 1")
+    else:
+        await cursor.execute(
+            "INSERT INTO alert_channel (id, channel_id) VALUES (1, ?) "
+            "ON CONFLICT(id) DO UPDATE SET channel_id = excluded.channel_id",
+            (_db_id(channel_id),),
+        )
 
 
 # ========== shop ========== #

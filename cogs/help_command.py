@@ -69,24 +69,28 @@ class Help(discord.Cog):
                 locale = await get_locale(cursor, ctx.author.id)
 
                 # setting owner name
-                owner_id = 336475402535174154
+                owner_id = self.bot.owner_id or 336475402535174154
                 owner_ids = await get_permitted(cursor)
-        try:
-            owner_name = str(self.bot.get_user(owner_id))
-        except Exception:
-            owner_name = "Malpkakefirek#2936"
-        try:
-            avatar = self.bot.get_user(owner_id).avatar.url
-        except Exception:
-            temp_owner = await self.bot.fetch_user(owner_id)
-            avatar = temp_owner.avatar.url
+
+        # get_or_fetch_user uses the cache first and only hits the API if needed
+        owner = None
+        if owner_id:
+            try:
+                owner = await self.bot.get_or_fetch_user(owner_id)
+            except Exception:
+                owner = None
+            if owner is None:
+                try:
+                    owner = await self.bot.fetch_user(owner_id)
+                except Exception:
+                    owner = None
+
+        owner_name = str(owner) if owner is not None else "Malpkakefirek"
+        avatar = owner.display_avatar.url if owner is not None else None
 
         # checks if cog parameter was given
         # if not: sending all modules and commands not associated with a cog
         if not command_or_category:
-            # checks if owner is on this server - used to 'tag' owner
-            owner = owner_name
-
             # starting to build embed
             emb = discord.Embed(
                 title=':sparkles: __All commands__ :sparkles:',
@@ -157,10 +161,11 @@ class Help(discord.Cog):
                 )
 
             # setting information about author
-            emb.set_footer(
-                text=command_texts['footer'][locale] % (owner, version),
-                icon_url=avatar,
-            )
+            footer_text = command_texts['footer'][locale] % (owner_name, version)
+            if avatar:
+                emb.set_footer(text=footer_text, icon_url=avatar)
+            else:
+                emb.set_footer(text=footer_text)
 
         # block called when one cog-name or command is given
         # trying to find matching cog and it's commands
